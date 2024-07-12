@@ -1,0 +1,5 @@
+"0","#model3 <- lmer(Average_Accuracy ~ 1 + Phrase_Condition + (1 + Phrase_Condition | Player_ID), data_condition) - error"
+"0",""
+"0","model3 <- lmer(Average_Accuracy ~ 1 + (1 + Phrase_Condition | Player_ID), data_condition)"
+"2","Error: number of observations (=152) <= number of random effects (=152) for term (1 + Phrase_Condition | Player_ID); the random-effects parameters and the residual variance (or scale parameter) are probably unidentifiable
+"

@@ -1,0 +1,8 @@
+"0","# Box Plot for Reaction Time vs. Answer"
+"0","ggplot(filtered_data, aes(x = as.factor(Answer), y = Reaction_Time, fill = as.factor(Answer))) +"
+"0","  geom_boxplot() +"
+"0","  scale_fill_manual(values = c(""1"" = ""red"", ""0"" = ""green"")) +"
+"0","  theme_ipsum() +"
+"0","  theme(legend.position = ""none"") +"
+"0","  ggtitle(""Reaction Time by Answer Type"") +"
+"0","  xlab(""Answer (1: Correct, 0: Incorrect)"") + ylab(""Reaction Time"")"

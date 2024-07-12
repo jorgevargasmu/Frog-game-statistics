@@ -1,0 +1,5 @@
+"0","# Distribution of LexTale"
+"0","ggplot(data, aes(x = LexTale)) + "
+"0","  geom_histogram(bins = 30, fill = brewer.pal(9, ""Blues"")[5], color = ""black"") +"
+"0","  theme_minimal() +"
+"0","  ggtitle(""Distribution of LexTale Scores"")"

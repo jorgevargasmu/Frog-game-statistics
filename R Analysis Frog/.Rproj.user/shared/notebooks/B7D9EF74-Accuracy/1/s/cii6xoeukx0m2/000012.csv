@@ -1,0 +1,9 @@
+"0","# Create a plot of Average_Accuracy vs. Question_Num with a regression line"
+"0","ggplot(data_learning, aes(x = Question_Num, y = Average_Accuracy)) +"
+"0","  geom_point(alpha = 0.3) +"
+"0","  geom_smooth(method = ""lm"", se = TRUE, color = ""blue"") +"
+"0","  labs(title = ""Average Accuracy vs. Question Number"","
+"0","       x = ""Question Number"","
+"0","       y = ""Average_Accuracy"")"
+"1","[38;5;255m`geom_smooth()` using formula = 'y ~ x'[39m
+"

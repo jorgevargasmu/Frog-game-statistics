@@ -1,0 +1,6 @@
+"0",""
+"0","# Plotting Accuracy across Phrase Conditions"
+"0","ggplot(filtered_data, aes(x = Phrase_Condition, y = Answer, group = Phrase_Condition)) +"
+"0","  stat_summary(fun.data = mean_se, geom = ""pointrange"", color = ""blue"") +"
+"0","  labs(title = ""Accuracy by Phrase Condition"", x = ""Phrase Condition"", y = ""Accuracy (%)"") +"
+"0","  theme_minimal()"

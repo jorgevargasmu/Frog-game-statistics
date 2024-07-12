@@ -1,0 +1,379 @@
+---
+title: "Frog Game Exploratory Data Analysis"
+author: "JMG"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# Load necessary library
+library(dplyr)
+library(ggplot2)
+library(RColorBrewer)
+library(tidyverse)
+library(hrbrthemes)
+library(viridis)
+library(gridExtra)
+library(MASS)
+library(nortest)
+```
+
+## Preprocess Data
+
+### Let's read the data in and make sure it looks normal
+
+```{r }
+data <- read.csv("/Users/jorgevargasmutizabal/Desktop/Data/R Analysis J/IN/nat.csv")
+summary(data)
+```
+
+### Define factors and numeric:
+
+```{r }
+#
+str(data)
+
+data <- data %>%
+  mutate(
+    Player_ID = as.factor(Player_ID),          # Convert to factor
+    LexTale = as.numeric(LexTale),              # Convert to numeric
+    Game_Version = as.factor(Game_Version),     # Convert to factor
+    Game_Level = as.factor(Game_Level),        # Convert to factor
+    Phrase_Condition = as.factor(Phrase_Condition), # Convert to factor
+    Question_Num = as.numeric(Question_Num),    # Convert to numeric
+    Answer = as.factor(Answer),                 # Convert to factor
+    Reaction_Time = as.numeric(Reaction_Time)   # Convert to numeric
+  )
+
+# Verify changes
+str(data)
+
+```
+
+What is going on with 'Answer'?
+
+### Let's look at the categories for each categorical variable:
+
+```{r }
+# Determine categorical variables
+categorical_columns <- sapply(data, function(x) is.factor(x) || is.character(x))
+
+# Print unique values for each categorical variable
+for (col_name in names(categorical_columns)[categorical_columns]) {
+  cat("Unique values in", col_name, ":\n")
+  print(unique(data[[col_name]]))
+  cat("\n")
+}
+```
+
+### Replace TRUE and FALSE with 1 and 0 in the Answer column and ensure it is numeric:
+
+```{r }
+data <- data %>%
+  mutate(Answer = case_when(
+    Answer == "TRUE" ~ 1,
+    Answer == "FALSE" ~ 0,
+    Answer == "1" ~ 1,
+    Answer == "0" ~ 0,
+    TRUE ~ as.numeric(as.character(Answer))
+  ))
+
+
+for (col_name in names(categorical_columns)[categorical_columns]) {
+  cat("Unique values in", col_name, ":\n")
+  print(unique(data[[col_name]]))
+  cat("\n")
+}
+```
+
+### Are there any missing values?
+
+```{r }
+#Broad level look at the data frame
+sum(is.na(data))
+
+colSums(is.na(data))
+
+summary(data)
+```
+
+## Occurence of each categorical variable
+
+```{r }
+# Bar Plot for Game Version
+ggplot(data, aes(x = Game_Version)) + 
+  geom_bar(fill = brewer.pal(4, "Set2")) +
+  theme_minimal() +
+  ggtitle("Count of Game Versions")
+
+# Bar Plot for Phrase Condition
+ggplot(data, aes(x = Phrase_Condition)) + 
+  geom_bar(fill = brewer.pal(4, "Pastel1")) +
+  theme_minimal() +
+  ggtitle("Count of Phrase Conditions")
+
+# Bar Plot for Game Level
+ggplot(data, aes(x = Game_Level)) + 
+  geom_bar(fill = brewer.pal(8, "Dark2")) +
+  theme_minimal() +
+  ggtitle("Distribution of Game Levels")
+
+# Bar Plot for Answer using numeric values as factors, without a legend
+ggplot(data, aes(x = as.factor(Answer), fill = as.factor(Answer))) + 
+  geom_bar() +
+  scale_fill_manual(values = c("1" = "#FF6666", "0" = "#9999FF")) +
+  theme_minimal() +
+  theme(legend.position = "none") +  # Hides the legend
+  ggtitle("Count of Correct and Incorrect Answers") +
+  xlab("Answer") + ylab("Count")
+```
+
+## Raw Distributions of numerical variables
+
+```{r }
+# Distribution of LexTale
+ggplot(data, aes(x = LexTale)) + 
+  geom_histogram(bins = 30, fill = brewer.pal(9, "Blues")[5], color = "black") +
+  theme_minimal() +
+  ggtitle("Distribution of LexTale Scores")
+
+# Distribution of Question_Num
+ggplot(data, aes(x = Question_Num)) + 
+  geom_histogram(bins = 30, fill = brewer.pal(9, "Greens")[3], color = "black") +
+  theme_minimal() +
+  ggtitle("Distribution of Question Number")
+
+# Distribution of Reaction Time
+ggplot(data, aes(x = Reaction_Time)) + 
+  geom_histogram(bins = 30, fill = brewer.pal(9, "Reds")[5], color = "black") +
+  theme_minimal() +
+  ggtitle("Distribution of Reaction Time")
+```
+
+There are outliers in the LexTale and the Reaction Time distributions. 
+
+## Let's filter outliers for reaction time.
+
+
+### Outlier testing on Reaction Time
+
+```{r }
+# Calculate the quartiles and IQR
+Q1 <- quantile(data$Reaction_Time, 0.25, na.rm = TRUE)
+Q3 <- quantile(data$Reaction_Time, 0.75, na.rm = TRUE)
+IQR <- Q3 - Q1
+
+# Define bounds
+lower_bound <- Q1 - 1.5 * IQR
+upper_bound <- Q3 + 1.5 * IQR
+
+# Filter outliers
+filtered_data <- data[data$Reaction_Time >= lower_bound & data$Reaction_Time <= upper_bound, ]
+
+write.csv(filtered_data, "filtered_data.csv")
+
+# Checking the effect of outlier removal
+original_n <- nrow(data)
+filtered_n <- nrow(filtered_data)
+cat("Original data had", original_n, "observations.\n")
+cat("Filtered data has", filtered_n, "observations.\n")
+cat("Number of outliers removed:", original_n - filtered_n, "\n")
+```
+
+### Density plots before and after outlier filtering: 
+
+```{r }
+# Plot before outlier removal
+p1 <- ggplot(data, aes(x = Reaction_Time)) +
+  geom_density(bins = 30, fill = brewer.pal(9, "Greys")[5], color = "black") +
+  geom_vline(xintercept = c(lower_bound, upper_bound), color = "red", linetype = "dashed") +
+  theme_minimal() +
+  ggtitle("Reaction Time Distribution (Original)") +
+  xlab("Reaction Time") + ylab("Count")
+
+# Plot after outlier removal
+p2 <- ggplot(filtered_data, aes(x = Reaction_Time)) +
+  geom_density(bins = 30, fill = brewer.pal(9, "Greens")[5], color = "black") +
+  theme_minimal() +
+  ggtitle("Reaction Time Distribution (Filtered)") +
+  xlab("Reaction Time") + ylab("Count")
+
+# Display plots in a grid
+grid.arrange(p1, p2, nrow = 2)
+```
+
+### Check for normality:
+
+```{r }
+# Generate a normally distributed dataset
+set.seed(123)  # For reproducibility
+normal_data <- rnorm(1000, mean = 50, sd = 10)  # 1000 data points, mean = 50, sd = 10
+
+# Perform the Anderson-Darling test on this normally distributed data
+ad_result <- ad.test(normal_data)
+
+# Print the results of the Anderson-Darling test for the synthetic normal data
+print("Anderson-Darling test results for synthetic normal data:")
+print(ad_result)
+
+# Now perform the Anderson-Darling test on the Reaction_Time from filtered_data
+ad_result_filtered <- ad.test(filtered_data$Reaction_Time)
+
+# Print the results of the Anderson-Darling test for the filtered data
+print("Anderson-Darling test results for filtered Reaction_Time data:")
+print(ad_result_filtered)
+```
+
+Filtered Reaction Time Data:
+A Statistic (A = 122.47): This very high value indicates a strong departure from normality.
+P-value (< 2.2e-16): An extremely low p-value strongly rejects the null hypothesis that the Reaction_Time data are normally distributed, suggesting significant deviations from a normal distribution.
+The filtered Reaction_Time data significantly deviate from normality, suggesting that either the data inherently possess non-normal characteristics or that the process of filtering did not achieve normality, necessitating further investigation or the use of non-parametric statistical methods for analysis. We should use non-parametric tests moving forward...
+
+## After filtering let's look at distributions of everything one last time:
+
+```{r }
+# Bar Plot for Game Version
+p1 <- ggplot(filtered_data, aes(x = Game_Version)) + 
+  geom_bar(fill = brewer.pal(4, "Set2")) +
+  theme_minimal() +
+  ggtitle("Count of Game Versions")
+
+# Bar Plot for Phrase Condition
+p2 <- ggplot(filtered_data, aes(x = Phrase_Condition)) + 
+  geom_bar(fill = brewer.pal(4, "Pastel1")) +
+  theme_minimal() +
+  ggtitle("Count of Phrase Conditions")
+
+# Bar Plot for Game Level
+p3 <- ggplot(filtered_data, aes(x = Game_Level)) + 
+  geom_bar(fill = brewer.pal(8, "Pastel2")) +
+  theme_minimal() +
+  ggtitle("Distribution of Game Levels")
+
+# Distribution of LexTale
+p4 <- ggplot(filtered_data, aes(x = LexTale)) + 
+  geom_histogram(bins = 30, fill = brewer.pal(9, "Blues")[5], color = "black") +
+  theme_minimal() +
+  ggtitle("Distribution of LexTale Scores")
+
+# Distribution of Question Number
+p5 <- ggplot(filtered_data, aes(x = Question_Num)) + 
+  geom_histogram(bins = 30, fill = brewer.pal(9, "Greens")[3], color = "black") +
+  theme_minimal() +
+  ggtitle("Distribution of Question Number")
+
+# Distribution of Reaction Time
+p6 <- ggplot(filtered_data, aes(x = Reaction_Time)) + 
+  geom_histogram(bins = 30, fill = brewer.pal(9, "Reds")[5], color = "black") +
+  theme_minimal() +
+  ggtitle("Distribution of Reaction Time")
+
+# Bar Plot for Answer using numeric values as factors, without a legend
+p7 <- ggplot(filtered_data, aes(x = as.factor(Answer), fill = as.factor(Answer))) + 
+  geom_bar() +
+  scale_fill_manual(values = c("1" = "#FF6666", "0" = "#9999FF")) +
+  theme_minimal() +
+  theme(legend.position = "none") +  # Hides the legend
+  ggtitle("Count of Correct and Incorrect Answers") +
+  xlab("Answer") + ylab("Count")
+
+# Arrange the plots in a grid
+grid.arrange(p1, p2, p3, p4, p5, p6, p7, nrow = 3, ncol = 3)
+```
+
+## Okay let's look some basic trends
+
+### Reaction time vs. Question Number
+
+```{r }
+# Calculate the correlation coefficients
+cor_reaction_time <- cor(filtered_data$Question_Num, filtered_data$Reaction_Time, use = "complete.obs")
+
+# Plot for Reaction Time vs. Question Number
+ggplot(filtered_data, aes(x=Question_Num, y=Reaction_Time)) +
+  geom_point(aes(color = Reaction_Time), alpha = 0.6) +  # Points with color based on value
+  geom_smooth(method=lm, color="red", fill="#69b3a2", se=TRUE) +  # Linear regression with confidence interval
+  annotate("text", x = Inf, y = Inf, label = sprintf("Corr: %.2f", cor_reaction_time),
+           hjust = 1.1, vjust = 2, size = 3.5, color = "red") +  # Add correlation value
+  theme_ipsum() +
+  ggtitle("Reaction Time vs. Question Number") +
+  xlab("Question Number") + ylab("Reaction Time")
+```
+
+Looks like there is no obvious trend between reaction time and question number.
+
+### Reaction Time vs. Answer Type
+
+```{r }
+# Box Plot for Reaction Time vs. Answer
+ggplot(filtered_data, aes(x = as.factor(Answer), y = Reaction_Time, fill = as.factor(Answer))) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("1" = "red", "0" = "green")) +
+  theme_ipsum() +
+  theme(legend.position = "none") +
+  ggtitle("Reaction Time by Answer Type") +
+  xlab("Answer (1: Correct, 0: Incorrect)") + ylab("Reaction Time")
+```
+
+Wonder if these differences are significant...
+
+## Wilcoxon Rank-Sum Test for Reaction Time
+
+```{r }
+# Wilcoxon Rank-Sum Test for Reaction Time
+# Filtered data should be used for reaction time if you're comparing groups post filtering
+wilcox.test(Reaction_Time ~ as.factor(Answer), data = filtered_data, alternative = "two.sided")
+```
+
+The test results support the alternative hypothesis that there is a nonzero difference between the median reaction times of the two groups. In practical terms, this means one group (either those who answered correctly or incorrectly) tends to have higher or lower reaction times than the other.
+
+## Checking correlations between numeric variables
+
+```{r }
+cor_matrix <- cor(filtered_data[c("LexTale", "Question_Num", "Reaction_Time")], use = "complete.obs")
+print(cor_matrix)
+```
+
+## Checking Chi-squared test for for independence between categorical variables
+
+```{r }
+# Chi-squared test for independence between categorical variables
+chisq.test(table(filtered_data$Game_Version, filtered_data$Phrase_Condition))
+```
+
+Variables are not independent...we know that....
+
+
+## Using the github examples
+```{r }
+# Descriptive statistics for Reaction Time and Answer
+# Summarize Reaction Time by Game Version, Game Level, and Phrase Condition
+RT_summary <- filtered_data %>%
+  group_by(Game_Version, Phrase_Condition) %>%
+  summarize(Mean_RT = mean(Reaction_Time, na.rm = TRUE), .groups = "drop")
+
+# Calculate accuracy percentage for each group
+accuracy_summary <- filtered_data %>%
+  group_by(Game_Version, Phrase_Condition) %>%
+  summarize(Accuracy_Percentage = mean(as.numeric(Answer)), .groups = "drop")
+
+RT_summary
+accuracy_summary
+
+# Plotting Reaction Time across Phrase Conditions
+ggplot(filtered_data, aes(x = Phrase_Condition, y = Reaction_Time, group = Phrase_Condition, fill = Phrase_Condition)) +
+  geom_boxplot() +
+  labs(title = "Reaction Time by Phrase Condition", x = "Phrase Condition", y = "Reaction Time (ms)") +
+  theme_minimal()
+
+# Plotting Accuracy across Phrase Conditions
+ggplot(filtered_data, aes(x = Phrase_Condition, y = Answer, group = Phrase_Condition)) +
+  stat_summary(fun.data = mean_se, geom = "pointrange", color = "blue") +
+  labs(title = "Accuracy by Phrase Condition", x = "Phrase Condition", y = "Accuracy (%)") +
+  theme_minimal()
+```
+
+
+### Look in detail at LaxTale scores, distribution, trends, outliers
+### Consider different transformations to meet normality assumptions.
+### Effect Size: It could be beneficial to calculate an effect size, like Cliff's Delta, to understand the magnitude of the difference between groups.

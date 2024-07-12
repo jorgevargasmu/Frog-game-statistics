@@ -1,0 +1,597 @@
+---
+title: "Frog Game Generalized Mixed Modeling"
+author: "JMG"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r }
+data <- read_csv("/Users/jorgevargasmutizabal/Desktop/Data/R Analysis J/IN/nat.csv")
+
+str(data)
+
+data <- data %>%
+  mutate(
+    Player_ID = as.factor(Player_ID),          # Convert to factor
+    LexTale = as.numeric(LexTale),              # Convert to numeric
+    Game_Version = as.factor(Game_Version),     # Convert to factor
+    Game_Level = as.factor(Game_Level),        # Convert to factor
+    Phrase_Condition = as.factor(Phrase_Condition), # Convert to factor
+    Question_Num = as.numeric(Question_Num),    # Convert to numeric
+    Answer = as.numeric(Answer),                 # Convert to factor
+    Reaction_Time = as.numeric(Reaction_Time)   # Convert to numeric
+  )
+
+# Verify changes
+str(data)
+
+```
+
+
+### Model 1: Simple Random Intercept
+**Formula:** `Reaction_Time ~ 1 + Question_Num + Phrase_Condition * Game_Version + (1 | Player_ID)`
+
+**Can Answer:**
+- How do reaction times generally relate to `Question_Num`, `Phrase_Condition`, and `Game_Version`?
+- Are there overall differences in reaction times due to the interaction between `Phrase_Condition` and `Game_Version`?
+- What is the baseline variation in reaction times across different players?
+
+**Cannot Answer:**
+- Does the effect of progressing through questions vary among individual players?
+- Do individual players react differently to various phrase conditions?
+- How do individual differences affect the interaction between phrase conditions and game versions?
+
+### Model 2: Adding Random Slope for Question Number
+**Formula:** `Reaction_Time ~ 1 + Question_Num + Phrase_Condition * Game_Version + (1 + Question_Num | Player_ID)`
+
+**Can Answer:**
+- All questions Model 1 can answer.
+- How does the impact of `Question_Num` on reaction times vary across individual players?
+
+**Cannot Answer:**
+- Do different players have distinct reactions to the various phrase conditions, beyond just a baseline reaction time difference?
+- How do individual differences interact with the combined effects of phrase conditions and game versions?
+
+### Model 3: Adding Random Slope for Phrase Condition
+**Formula:** `Reaction_Time ~ 1 + Question_Num + Phrase_Condition * Game_Version + (1 + Phrase_Condition | Player_ID)`
+
+**Can Answer:**
+- All questions Model 1 can answer.
+- How does the impact of different `Phrase_Condition`s on reaction times vary among individual players?
+
+**Cannot Answer:**
+- How do individual differences in reaction to questions over time affect reaction times?
+- Does the relationship between phrase condition and game version differ by player, considering their specific reaction to both conditions and questions over time?
+
+### Model 4: Combining Random Slopes for Both Question Number and Phrase Condition
+**Formula:** `Reaction_Time ~ 1 + Question_Num + Phrase_Condition * Game_Version + (1 + Question_Num + Phrase_Condition | Player_ID)`
+
+**Can Answer:**
+- All questions that Models 1, 2, and 3 can answer.
+- How do individual differences in reaction to both `Question_Num` and `Phrase_Condition` interact to affect reaction times?
+- Does the way a player's reaction time changes with questions relate to how they react to different phrase conditions?
+
+**Cannot Answer:**
+- Specific inquiries about third-level interactions involving game version beyond the fixed effects structure, unless further random slopes for `Game_Version` or its interaction terms are included.
+- Questions about more complex nested or crossed random effects not specified in the model (e.g., random slopes for `Game_Version`, or cross-level interactions such as `Phrase_Condition:Game_Version | Player_ID`).
+
+### Summary
+Each model’s ability to answer specific questions is tied to the random effects it includes. As you add more complexity to the model (like in Model 4), you can address more detailed and specific questions about individual variations and interactions between the effects. However, each addition also requires more data and computational power, and the risk of overfitting or convergence issues increases. Therefore, selecting a model should balance the need for detail with the practicality of fitting the model and the quality of the data available.
+
+
+# Let's fit some models!
+
+
+
+
+## 0. What is the average reaction time marginalizing over everything?
+### Oa: rt ~ 1 + (1 | participant)
+Fitting this model allows you to determine how much variation in reaction times is due to individual differences between players versus random noise or other factors. A significant Player_ID variance component suggests individual differences are important; if it's close to zero, reaction times are consistent across players, and the random effect may be unnecessary.
+
+```{r }
+model1 <- lmer(Reaction_Time ~ 1 + (1 | Player_ID), data = data)
+
+# Obtain and print a summary of the model to examine fixed and random effects
+print(summary(model1))
+
+#Diagnostic plots
+plot_residuals_diagnostics(model1)
+
+# Model diagnostics
+check_model(model1)
+```
+
+Random Effects Player_ID: The variance for random intercepts attributed to Player_ID is 0.01319 with a standard deviation of 0.1149, indicating small variability in reaction times among players compared to residual variability.
+
+Residual Variance: The residual variance is 0.16394 with a standard deviation of 0.4049, showing that most variability in reaction times is due to unaccounted factors or inherent variability in individual reactions.
+
+Fixed Effects Intercept (Overall Average Reaction Time): The intercept estimate is 0.83745 with a standard error of 0.01885, indicating an average reaction time of approximately 0.837 seconds. The t-value of 44.43 and a p-value of less than 0.001 confirm that this average reaction time is significantly different from zero.
+
+Interpretation of the Model: The analysis shows small variability in reaction times due to individual differences (Player_ID) with most variance captured by the residual term. This suggests either consistent game difficulty across players or minimal variation in individual reaction times.
+
+## 1. Does learning take place?
+### 1b: rt ~ 1 + time + (1 + time | participant)
+
+```{r }
+model2 <- lmer(Reaction_Time ~ 1 + Question_Num + (1 + Question_Num | Player_ID), data = data)
+
+# Obtain and print a summary of the model to examine fixed and random effects
+print(summary(model2))
+
+#Diagnostic plots
+plot_residuals_diagnostics(model2)
+
+# Diagnostic checks - Simulating residuals to validate model assumptions
+residuals_simulation <- simulateResiduals(fittedModel = model2, n = 500)
+plot(residuals_simulation)
+
+# Model diagnostics
+check_model(model2)
+
+# Check for influential cases potentially affecting the model
+#influence_measures <- influence(model3)
+#plot(influence_measures, which = "cook")
+
+# If assumptions are not met, consider re-fitting the model with transformations or different specifications
+# model_revised <- update(model, . ~ . + log(Reaction_Time))
+# print(summary(model_revised))
+
+# Model interpretation - examining fixed and random effects
+#fixed_effects <- fixef(model3)
+#random_effects <- ranef(model3)
+
+# Printing fixed effects for interpretation
+#print(fixed_effects)
+
+# Printing random effects for interpretation
+#print(random_effects)
+
+# Get estimated marginal means for specific values of Question_Num
+emm_results <- emmeans(model2, specs = ~ Question_Num, at = list(Question_Num = seq(min(data$Question_Num), max(data$Question_Num), by = 10)))
+
+# Summarize the results
+summary(emm_results)
+
+# Plot the estimated marginal means
+plot(emm_results)
+```
+```{r }
+# Create a plot of Reaction_Time vs. Question_Num with a regression line
+ggplot(data, aes(x = Question_Num, y = Reaction_Time)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(title = "Reaction Time vs. Question Number",
+       x = "Question Number",
+       y = "Reaction Time")
+```
+
+
+## 2. Which condition is the hardest overall?
+### 2a: rt - 1 + condition + (1 + condition | participant)
+
+1 | Player_ID: Introduces a random intercept for each player, allowing baseline reaction times to vary.
+Phrase_Condition | Player_ID: Adds random slopes for the effect of Phrase_Condition on reaction time for each player, indicating that players may react differently to each phrase condition.
+Implications of Including Random Slopes:
+Individual Variability: Acknowledges that the effect of phrase conditions varies among players, leading to a more accurate model by accounting for interaction-like effects.
+Complexity: Increases the number of parameters to estimate, including a variance component for the random slopes.
+
+
+```{r }
+model3 <- lmer(Reaction_Time ~ 1 + Phrase_Condition + (1 + Phrase_Condition | Player_ID), data = data)
+
+# Obtain and print a summary of the model to examine fixed and random effects
+print(summary(model3))
+
+#Diagnostic plots
+plot_residuals_diagnostics(model3)
+
+# Diagnostic checks - Simulating residuals to validate model assumptions
+residuals_simulation <- simulateResiduals(fittedModel = model3, n = 500)
+plot(residuals_simulation)
+
+# Model diagnostics
+check_model(model3)
+
+# Check for influential cases potentially affecting the model
+#influence_measures <- influence(model3)
+#plot(influence_measures, which = "cook")
+
+# If assumptions are not met, consider re-fitting the model with transformations or different specifications
+# model_revised <- update(model, . ~ . + log(Reaction_Time))
+# print(summary(model_revised))
+
+# Model interpretation - examining fixed and random effects
+#fixed_effects <- fixef(model3)
+#random_effects <- ranef(model3)
+
+# Printing fixed effects for interpretation
+#print(fixed_effects)
+
+# Printing random effects for interpretation
+#print(random_effects)
+
+# Conducting pairwise comparisons of phrase conditions using estimated marginal means
+emm_results <- emmeans(model3, specs = ~ Phrase_Condition)
+summary(emm_results)
+pairwise_comparisons <- emmeans(model3, specs = pairwise ~ Phrase_Condition)
+summary(pairwise_comparisons)
+plot(emm_results)
+```
+Overall Model Interpretation:
+This model shows how different phrase conditions affect reaction times, accounting for both average player effects and individual differences. Conditions 2 and 4 significantly increase reaction times, suggesting they are more challenging. This can guide game difficulty adjustments or targeted practice for players struggling with specific phrases. The random slopes indicate that these conditions impact players differently, supporting personalized gameplay or learning approaches.
+
+Condition Effects:
+
+Phrase_Condition2: Increases reaction time by 0.23230 seconds (p < 1.27e-10).
+Phrase_Condition3: Increases reaction time by 0.03446 seconds, not statistically significant (p = 0.106).
+Phrase_Condition4: Increases reaction time by 0.39736 seconds (p < 1.74e-14).
+Phrase_Condition4 is the hardest, with the largest significant effect, followed by Phrase_Condition2. Phrase_Condition3 does not significantly differ from the baseline.
+
+```{r }
+# Create a boxplot
+ggplot(data, aes(x = Phrase_Condition, y = Reaction_Time, fill = Phrase_Condition)) +
+  geom_boxplot() +
+  labs(title = "Reaction Times by Phrase Condition", x = "Phrase Condition", y = "Reaction Time (seconds)") +
+  theme_minimal()
+```
+
+```{r }
+# Calculate average reaction times per player per condition
+avg_reaction_times <- data %>%
+  group_by(Player_ID, Phrase_Condition) %>%
+  summarise(Avg_Reaction_Time = mean(Reaction_Time), .groups = 'drop')
+
+# Interaction plot
+ggplot(avg_reaction_times, aes(x = Phrase_Condition, y = Avg_Reaction_Time, group = Player_ID, color = Phrase_Condition)) +
+  geom_line(alpha = 0.5) +  # Slightly transparent to see overlapping lines
+  geom_point() +
+  labs(title = "Interaction of Phrase Condition and Player on Reaction Times", x = "Phrase Condition", y = "Average Reaction Time (seconds)") +
+  theme_minimal()
+```
+
+Jorge:
+## 3. Does the version of the experiment cause different outcomes?
+
+```{r}
+model8 <- lmer(Reaction_Time ~ 1 + Game_Version + (1 | Player_ID), data = data)
+
+# Obtain and print a summary of the model to examine fixed and random effects
+print(summary(model8))
+
+#Diagnostic plots
+plot_residuals_diagnostics(model8)
+
+# Diagnostic checks - Simulating residuals to validate model assumptions
+residuals_simulation <- simulateResiduals(fittedModel = model8, n = 500)
+plot(residuals_simulation)
+
+# Model diagnostics
+check_model(model8)
+
+# Check for influential cases potentially affecting the model
+#influence_measures <- influence(model4)
+#plot(influence_measures, which = "cook")
+
+# If assumptions are not met, consider re-fitting the model with transformations or different specifications
+# model_revised <- update(model, . ~ . + log(Reaction_Time))
+# print(summary(model_revised))
+
+# Model interpretation - examining fixed and random effects
+fixed_effects <- fixef(model8)
+random_effects <- ranef(model8)
+
+```
+
+
+## How does the effect of condition vary depending on the version?
+### 4b: rt ~ 1 + condition * version + (1 + condition | participant)
+
+Main Effects:
+
+Phrase_Condition: Measures how different phrase conditions affect reaction times compared to the baseline condition.
+Game_Version: Evaluates the impact of different game versions on reaction times relative to the baseline version.
+Interaction Effect (Phrase_Condition * Game_Version):
+
+Assesses if the effect of a phrase condition on reaction times changes across game versions.
+Each interaction coefficient shows how the combined effect of a phrase condition and game version differs from their individual effects.
+Random Effects:
+
+(1 | Player_ID): Models random intercepts for each player, indicating variability in baseline reaction times not explained by phrase conditions or game versions. Each player has an adjusted baseline reaction time.
+Interpretation:
+
+Intercept: Represents the average reaction time for the baseline phrase condition and game version.
+Main Effects: Coefficients show how reaction times change with each phrase condition and game version, assuming no interaction.
+Interaction Effects: Significant interaction terms indicate that the effect of a phrase condition on reaction time is modified by the game version, suggesting areas for tailored game design to optimize learning or user experience.
+
+```{r }
+#This doesnt work:
+#model4 <- lmer(Reaction_Time ~ 1 + Phrase_Condition * Game_Version + (1 + Phrase_Condition | Player_ID), data = data)
+
+model4 <- lmer(Reaction_Time ~ 1 + Phrase_Condition * Game_Version + (1 | Player_ID), data = data)
+
+# Obtain and print a summary of the model to examine fixed and random effects
+print(summary(model4))
+
+#Diagnostic plots
+plot_residuals_diagnostics(model4)
+
+# Diagnostic checks - Simulating residuals to validate model assumptions
+residuals_simulation <- simulateResiduals(fittedModel = model4, n = 500)
+plot(residuals_simulation)
+
+# Model diagnostics
+check_model(model4)
+
+# Check for influential cases potentially affecting the model
+#influence_measures <- influence(model4)
+#plot(influence_measures, which = "cook")
+
+# If assumptions are not met, consider re-fitting the model with transformations or different specifications
+# model_revised <- update(model, . ~ . + log(Reaction_Time))
+# print(summary(model_revised))
+
+# Model interpretation - examining fixed and random effects
+fixed_effects <- fixef(model4)
+random_effects <- ranef(model4)
+
+# Printing fixed effects for interpretation
+print(fixed_effects)
+
+# Printing random effects for interpretation
+print(random_effects)
+
+# Estimate marginal means for all combinations
+emm1 <- emmeans(model4, specs = ~ Phrase_Condition * Game_Version)
+summary(emm1)
+
+# Pairwise comparisons across phrase conditions within each game version
+pairs(emm1, simple = "each")
+
+plot(emm1)
+```
+- **`Phrase_Condition4`** shows a substantial increase in reaction times, suggesting it is more challenging than the baseline condition.
+- **Interactions such as `Phrase_Condition2:Game_Version2` and `Phrase_Condition3:Game_Version3`** are significantly affecting reaction times, indicating that the combination of these conditions and versions exacerbates or alters the impact seen with the conditions alone.
+- **Non-significant main effects for `Game_Version`** (2, 3, and 4) suggest that changes in game versions alone do not significantly alter reaction times, but their interactions with phrase conditions do.
+- **Practical Significance:** The model indicates that while some game versions and phrase conditions significantly affect reaction times, others do not. This can inform adjustments in game design or targeted interventions for training or improvement purposes.
+- **Model Fit and Quality:** The REML criterion and scaled residuals indicate the model fits the data well. Scaled residuals spread mostly symmetrically around zero, suggesting adequate model fit without apparent bias.
+
+## 5. Does the rate of improvement in each condition depend on the version?
+### 5a: rt ~ 1 + time + condition * version + (1 + time + condition | participant)
+
+1 (Intercept): Represents the baseline reaction time for the first question and the baseline categories of Phrase_Condition and Game_Version.
+
+Question_Num: Continuous variable representing the sequential number of questions. A negative coefficient indicates improved reaction time (i.e., decreasing reaction time) as the game progresses.
+
+Phrase_Condition * Game_Version: Examines if the effect of phrase conditions on reaction time is modified by the game version, identifying combinations where game version influences the difficulty of phrase conditions.
+
+(1 | Player_ID): Random intercepts for players account for individual differences in baseline reaction times, acknowledging that some players generally respond faster or slower than others, independent of condition or version.
+
+```{r }
+model5 <- lmer(Reaction_Time ~ 1 + Question_Num + Phrase_Condition * Game_Version + (1 | Player_ID), data = data)
+
+# Obtain and print a summary of the model to examine fixed and random effects
+print(summary(model5))
+
+#Diagnostic plots
+plot_residuals_diagnostics(model5)
+
+# Diagnostic checks - Simulating residuals to validate model assumptions
+residuals_simulation <- simulateResiduals(fittedModel = model5, n = 500)
+plot(residuals_simulation)
+
+# Model diagnostics
+check_model(model5)
+
+# Check for influential cases potentially affecting the model
+#influence_measures <- influence(model5)
+#plot(influence_measures, which = "cook")
+
+# If assumptions are not met, consider re-fitting the model with transformations or different specifications
+# model_revised <- update(model, . ~ . + log(Reaction_Time))
+# print(summary(model_revised))
+
+# Model interpretation - examining fixed and random effects
+fixed_effects <- fixef(model5)
+random_effects <- ranef(model5)
+
+# Printing fixed effects for interpretation
+print(fixed_effects)
+
+# Printing random effects for interpretation
+print(random_effects)
+
+# Estimate marginal means at various levels of Question_Num
+emm2 <- emmeans(model5, specs = ~ Phrase_Condition * Game_Version, at = list(Question_Num = c(1, 10, 20)))
+summary(emm2)
+
+# Trend analysis
+trend_analysis <- emtrends(model5, specs = ~ Phrase_Condition * Game_Version, var = "Question_Num")
+summary(trend_analysis)
+
+plot(emm2)
+
+```
+
+Model Overview
+
+Formula: Reaction time ~ question number, phrase conditions, game versions, and their interactions, with a random intercept for each player.
+Data: 21,488 observations from 38 unique players.
+Random Effects
+
+Player Variability: Variance = 0.01431 (Std.Dev. = 0.1196), indicating moderate variation.
+Residual Variability: Variance = 0.13911 (Std.Dev. = 0.3730), suggesting much of the variation remains unexplained.
+Fixed Effects
+
+Intercept: Baseline reaction time is 0.6381 seconds.
+Question_Num: Positive but very small coefficient (1.384e-04), indicating minimal change over time.
+Phrase_Condition: Phrase_Condition4 significantly increases reaction times; Phrase_Condition2 increases slightly; Phrase_Condition3 shows a minor decrease.
+Game_Version: Versions 2, 3, and 4 do not significantly affect reaction times.
+Interaction Effects
+
+Significant Positive Interactions: Certain combinations (e.g., Phrase_Condition3 and Game_Version3, Phrase_Condition2 and Game_Version2) increase reaction times more than individual effects.
+Non-significant/Negative Interactions: Some combinations do not significantly impact or slightly decrease reaction times (e.g., Phrase_Condition4).
+Interpretation and Implications
+
+Interactions Matter: Highlights the importance of considering interactions between game design elements.
+Minimal Overall Time Trend: Very small positive coefficient for Question_Num suggests minimal change in reaction times, indicating little learning or fatigue effects.
+Model Fit and Residuals: Significant random effects variance indicates the model captures some complexity, but individual differences and unmodeled factors still contribute to variability in reaction times.
+
+## Let's compare different models
+
+```{r }
+# Fit the models as described
+model6 <- lmer(Reaction_Time ~ 1 + Phrase_Condition * Game_Version + (1 | Player_ID), data = data)
+
+# Model with random intercept and random slope for the interaction term
+model7 <- lmer(Reaction_Time ~ 1 + Phrase_Condition * Game_Version + (1 + Phrase_Condition | Player_ID), data = data)
+
+# Model with random intercept and random slope for the interaction term
+#model8 <- lmer(Reaction_Time ~ 1 + Phrase_Condition * Game_Version + 
+#               (1 | Player_ID) + (0 + Phrase_Condition * Game_Version | Player_ID), data = data)
+
+anova(model6, model7)
+```
+
+Interpretation 6: This model tells you how Phrase_Condition and Game_Version interact to influence reaction time, considering the average differences among players.
+
+Interpretation 7: This model tells you how Phrase_Condition and Game_Version interact to influence reaction time, and also how the effect of Phrase_Condition on reaction time varies among players.
+
+Interpretation 8: This model tells you how Phrase_Condition and Game_Version interact to influence reaction time, and how this interaction effect varies among players.
+
+Model 6 vs. Model 7:
+
+Model 6: Simpler, assumes the effect of Phrase_Condition is consistent across players.
+Model 7: More complex, allows the effect of Phrase_Condition to vary by player, providing a more individualized understanding of how Phrase_Condition impacts reaction time.
+
+
+1. **Model Fit:**
+   - **AIC and BIC:** Both AIC and BIC are lower for Model 7 compared to Model 6, indicating that Model 7 provides a better fit to the data despite having more parameters. Lower values of AIC and BIC suggest a model with a better balance of goodness-of-fit and complexity.
+   - **Log-Likelihood:** Model 7 has a higher log-likelihood (less negative) compared to Model 6, which also indicates a better fit.
+
+2. **Deviance:**
+   - The deviance is lower for Model 7 (17477) compared to Model 6 (18753), indicating that Model 7 explains more of the variability in `Reaction_Time`.
+
+3. **Chi-Square Test:**
+   - The Chi-Square test for the difference in deviance between the models is highly significant (Chi-Square = 1275.9, p < 2.2e-16). This significant result indicates that Model 7 provides a significantly better fit to the data than Model 6.
+   - The degrees of freedom for the test is 9, corresponding to the difference in the number of parameters between the two models (27 - 18).
+
+### What Model 7 Tells You:
+
+- **Improved Fit:** Model 7, with random slopes for `Phrase_Condition` by `Player_ID`, fits the data significantly better than Model 6. This suggests that allowing the effect of `Phrase_Condition` to vary across players captures important variability in `Reaction_Time`.
+- **Individual Differences:** Model 7 accounts for individual differences in how `Phrase_Condition` affects reaction time, which is not captured in Model 6.
+
+### Conclusion:
+
+Model 7 is a better choice for your data as it provides a significantly improved fit by allowing for random slopes for `Phrase_Condition`. This model acknowledges that the effect of `Phrase_Condition` on `Reaction_Time` varies among players, capturing individual differences that Model 6 does not.
+
+
+
+
+
+
+
+
+## Reformat the data to answer each Accuracy question
+
+```{r }
+# Dataframe for learning (Accuracy over Time)
+data_learning <- data %>%
+  group_by(Player_ID, Question_Num) %>%
+  summarise(Average_Accuracy = mean(Answer), .groups = 'drop')
+
+# Dataframe for hardest condition
+data_condition <- data %>%
+  group_by(Player_ID, Phrase_Condition) %>%
+  summarise(Average_Accuracy = mean(Answer), .groups = 'drop')
+
+# Dataframe for the impact of different versions
+data_version <- data %>%
+  group_by(Player_ID, Game_Version) %>%
+  summarise(Average_Accuracy = mean(Answer), .groups = 'drop')
+
+# Dataframe for rate of improvement depending on the version and condition
+data_improvement <- data %>%
+  group_by(Player_ID, Question_Num, Phrase_Condition, Game_Version) %>%
+  summarise(Average_Accuracy = mean(Answer), .groups = 'drop')
+```
+
+
+## What is the average accuracy marginalizing over everything?
+### Ob: ac ~ 1 + (1 | participant)
+
+```{r }
+# Dataframe for overall average accuracy per participant
+data_ac <- data %>%
+  group_by(Player_ID) %>%
+  summarise(Average_Accuracy = mean(Answer), .groups = 'drop')
+
+# Fit the model
+model2 <- lm(Average_Accuracy ~ 1, data = data_ac)
+
+# Obtain and print a summary of the model to examine fixed and random effects
+print(summary(model2))
+
+#Diagnostic plots
+#plot_residuals_diagnostics(model2)
+plot(model2)
+
+# Diagnostic checks - Simulating residuals to validate model assumptions
+residuals_simulation <- simulateResiduals(fittedModel = model2, n = 500)
+plot(residuals_simulation)
+
+# Model diagnostics
+check_model(model2)
+
+# If assumptions are not met, consider re-fitting the model with transformations or different specifications
+# model_revised <- update(model, . ~ . + log(Reaction_Time))
+# print(summary(model_revised))
+```
+
+## How does the effect of condition vary depending on the version?
+### 4b: ac - 1 + condition * version + (1 + condition | participant)
+
+```{r }
+# Dataframe for condition and version interaction
+data_condition_version <- data %>%
+  group_by(Player_ID, Phrase_Condition, Game_Version) %>%
+  summarise(Average_Accuracy = mean(Answer), .groups = 'drop')
+
+#This doesnt work:
+#model4 <- lmer(Average_Accuracy ~ 1 + Phrase_Condition * Game_Version + (1 + Phrase_Condition | Player_ID), data = data_condition_version)
+model4 <- lmer(Average_Accuracy ~ 1 + Phrase_Condition * Game_Version + (1 | Player_ID), data = data_condition_version)
+
+# Obtain and print a summary of the model to examine fixed and random effects
+print(summary(model4))
+
+#Diagnostic plots
+plot_residuals_diagnostics(model4)
+
+# Diagnostic checks - Simulating residuals to validate model assumptions
+residuals_simulation <- simulateResiduals(fittedModel = model4, n = 500)
+plot(residuals_simulation)
+
+# Model diagnostics
+check_model(model4)
+
+# Check for influential cases potentially affecting the model
+#influence_measures <- influence(model4)
+#plot(influence_measures, which = "cook")
+
+# If assumptions are not met, consider re-fitting the model with transformations or different specifications
+# model_revised <- update(model, . ~ . + log(Reaction_Time))
+# print(summary(model_revised))
+
+# Model interpretation - examining fixed and random effects
+fixed_effects <- fixef(model4)
+random_effects <- ranef(model4)
+
+# Printing fixed effects for interpretation
+print(fixed_effects)
+
+# Printing random effects for interpretation
+print(random_effects)
+
+# Conducting pairwise comparisons of phrase conditions using estimated marginal means
+emm_results <- emmeans(model4, specs = pairwise ~ Phrase_Condition)
+print(summary(emm_results))
+```

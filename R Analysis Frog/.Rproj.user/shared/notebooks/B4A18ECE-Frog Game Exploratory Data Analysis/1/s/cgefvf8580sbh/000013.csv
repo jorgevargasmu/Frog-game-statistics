@@ -1,0 +1,6 @@
+"0",""
+"0","# Plotting Reaction Time across Phrase Conditions"
+"0","ggplot(filtered_data, aes(x = Phrase_Condition, y = Reaction_Time, group = Phrase_Condition, fill = Phrase_Condition)) +"
+"0","  geom_boxplot() +"
+"0","  labs(title = ""Reaction Time by Phrase Condition"", x = ""Phrase Condition"", y = ""Reaction Time (ms)"") +"
+"0","  theme_minimal()"

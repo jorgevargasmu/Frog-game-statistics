@@ -1,0 +1,6 @@
+"0",""
+"0","# Distribution of Question_Num"
+"0","ggplot(data, aes(x = Question_Num)) + "
+"0","  geom_histogram(bins = 30, fill = brewer.pal(9, ""Greens"")[3], color = ""black"") +"
+"0","  theme_minimal() +"
+"0","  ggtitle(""Distribution of Question Number"")"

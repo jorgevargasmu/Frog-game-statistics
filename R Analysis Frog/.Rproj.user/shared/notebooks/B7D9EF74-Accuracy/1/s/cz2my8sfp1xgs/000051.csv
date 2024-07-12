@@ -1,0 +1,3 @@
+"0","model1 <- lmer(Average_Accuracy ~ 1 + (1 | Player_ID), data_ac)"
+"2","Error: number of levels of each grouping factor must be < number of observations (problems: Player_ID)
+"
