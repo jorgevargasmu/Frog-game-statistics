@@ -169,6 +169,9 @@ print(summary(emm_results))
 ```{r }
 model1 <- lmer(Average_Accuracy ~ 1 + (1 | Player_ID), data_ac)
 
+
+#Error: number of levels of each grouping factor must be < number of observations (problems: Player_ID)
+
 # Obtain and print a summary of the model to examine fixed and random effects
 print(summary(model1))
 
@@ -240,6 +243,8 @@ ggplot(data_learning, aes(x = Question_Num, y = Average_Accuracy)) +
 #model3 <- lmer(Average_Accuracy ~ 1 + Phrase_Condition + (1 + Phrase_Condition | Player_ID), data_condition) - error
 
 model3 <- lmer(Average_Accuracy ~ 1 + (1 + Phrase_Condition | Player_ID), data_condition)
+
+#Error: number of observations (=152) <= number of random effects (=152) for term (1 + Phrase_Condition | Player_ID); the random-effects parameters and the residual variance (or scale parameter) are probably unidentifiable
 
 # Obtain and print a summary of the model to examine fixed and random effects
 print(summary(model3))
