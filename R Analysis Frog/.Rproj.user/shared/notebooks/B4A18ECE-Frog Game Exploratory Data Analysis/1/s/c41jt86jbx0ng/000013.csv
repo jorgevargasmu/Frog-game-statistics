@@ -1,6 +1,0 @@
-"0",""
-"0","# Distribution of Reaction Time"
-"0","ggplot(data, aes(x = Reaction_Time)) + "
-"0","  geom_histogram(bins = 30, fill = brewer.pal(9, ""Reds"")[5], color = ""black"") +"
-"0","  theme_minimal() +"
-"0","  ggtitle(""Distribution of Reaction Time"")"

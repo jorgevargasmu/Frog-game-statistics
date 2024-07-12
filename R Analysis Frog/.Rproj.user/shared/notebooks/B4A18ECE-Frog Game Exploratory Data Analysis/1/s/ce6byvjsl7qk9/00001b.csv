@@ -1,6 +1,0 @@
-"0",""
-"0","# Bar Plot for Game Level"
-"0","ggplot(data, aes(x = Game_Level)) + "
-"0","  geom_bar(fill = brewer.pal(8, ""Dark2"")) +"
-"0","  theme_minimal() +"
-"0","  ggtitle(""Distribution of Game Levels"")"

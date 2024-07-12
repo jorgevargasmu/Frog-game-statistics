@@ -1,4 +1,0 @@
-"0","model1 <- lmer(Reaction_Time ~ 1 + (1 | Player_ID), data = data)"
-"2","Error in initializePtr() : 
-  function 'cholmod_factor_ldetA' not provided by package 'Matrix'
-"

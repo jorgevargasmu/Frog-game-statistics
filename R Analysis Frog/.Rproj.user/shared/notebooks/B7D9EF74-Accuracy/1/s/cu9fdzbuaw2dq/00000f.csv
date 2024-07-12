@@ -1,4 +1,0 @@
-"0","# Conducting pairwise comparisons of phrase conditions using estimated marginal means"
-"0","emm_results <- emmeans(model4, specs = pairwise ~ Phrase_Condition)"
-"2","NOTE: Results may be misleading due to involvement in interactions
-"

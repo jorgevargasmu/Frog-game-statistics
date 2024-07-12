@@ -1,5 +1,0 @@
-"0","# Create a boxplot"
-"0","ggplot(data_condition, aes(x = Phrase_Condition, y = Average_Accuracy, fill = Phrase_Condition)) +"
-"0","  geom_boxplot() +"
-"0","  labs(title = ""Average Accuracy by Phrase Condition"", x = ""Phrase Condition"", y = ""Accuracy (seconds)"") +"
-"0","  theme_minimal()"

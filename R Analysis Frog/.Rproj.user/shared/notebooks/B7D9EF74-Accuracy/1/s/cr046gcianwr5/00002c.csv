@@ -1,3 +1,0 @@
-"0","# Diagnostic checks - Simulating residuals to validate model assumptions"
-"0","residuals_simulation <- simulateResiduals(fittedModel = model4, n = 500)"
-"0","plot(residuals_simulation)"

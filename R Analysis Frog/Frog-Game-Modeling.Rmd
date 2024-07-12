@@ -5,8 +5,103 @@ date: "`r Sys.Date()`"
 output: html_document
 ---
 
+# We are going to fit general mixed linear models on the frog game data to figure out which factors affect accuracy and reaction time.
+
+```{r setup, include=FALSE}
+library(lme4)
+library(ggplot2)
+library(performance)
+library(DHARMa)
+library(lmerTest)
+library(tidyverse)
+library(emmeans)
+library(gridExtra)
+
+# Define a function for plotting residuals diagnostics
+plot_residuals_diagnostics <- function(model) {
+  # Ensure the model is of class 'merMod' from lme4 package
+  if (!inherits(model, "merMod")) {
+    stop("The provided model is not a valid 'merMod' object from lme4.")
+  }
+  
+  # Create a dataframe of residuals and fitted values from the model
+  residuals_df <- data.frame(
+    Residuals = residuals(model),
+    Fitted = fitted(model)
+  )
+  
+  # Plot histogram of residuals
+  p1 <- ggplot(residuals_df, aes(x = Residuals)) +
+    geom_histogram(bins = 30, fill = "blue", color = "black") +
+    labs(title = "Histogram of Residuals", x = "Residuals", y = "Frequency")
+  print(p1)
+  
+  # QQ plot for checking normality of residuals
+  qqnorm(residuals_df$Residuals)
+  qqline(residuals_df$Residuals, col = "red", lwd = 2)
+
+  # Plot of residuals vs. fitted values
+  p3 <- ggplot(residuals_df, aes(x = Fitted, y = Residuals)) +
+    geom_point() +
+    geom_smooth(method = "lm", col = "red") +
+    labs(title = "Residuals vs. Fitted Values", x = "Fitted Values", y = "Residuals")
+  print(p3)
+}
+```
+
+## Before we fit our actual data, let's go over what a good model fit looks like:
+
+Visualizing diagnostic plots such as histograms of residuals, Q-Q plots, and residuals vs. fitted value plots are crucial for evaluating the assumptions behind a linear model. Here's what you should look for in each type of plot for it to be considered "good" or indicative of a well-fitting model:
+
 ```{r }
-data <- read_csv("/Users/jorgevargasmutizabal/Desktop/Data/R Analysis J/IN/nat.csv")
+# Simulate data
+set.seed(42)
+x <- seq(10, 100, length.out=100)
+y <- 3 * x + rnorm(100, mean=0, sd=20)
+data <- data.frame(X=x, Y=y)
+
+# Fit a linear model
+model <- lm(Y ~ X, data=data)
+
+# Calculate residuals
+residuals <- resid(model)
+
+# Histogram of Residuals
+p1 <- ggplot(data, aes(x=residuals)) +
+  geom_histogram(bins=20, fill="blue", alpha=0.7) +
+  labs(title="Histogram of Residuals", x="Residuals", y="Frequency")
+
+# Q-Q plot of Residuals
+p2 <- ggplot() +
+  stat_qq(aes(sample=residuals), color="blue", alpha=0.5) +
+  stat_qq_line(aes(sample=residuals), color="red", linetype="dashed") +
+  labs(title="Q-Q Plot of Residuals")
+
+# Residuals vs. Fitted Values
+p3 <- ggplot(data, aes(x=fitted(model), y=residuals)) +
+  geom_point(alpha=0.7, color="blue") +
+  geom_hline(yintercept=0, linetype="dashed", color="red") +
+  labs(x="Fitted Values", y="Residuals", title="Residuals vs. Fitted Values")
+
+# Combine the plots
+grid.arrange(p1, p2, p3, ncol=2)
+```
+
+Histogram of Residuals:
+Residuals should form a bell-shaped curve centered around zero, indicating normal distribution.
+No significant skew should be present; skewness suggests outliers or unaccounted transformations in the response variable.
+Q-Q Plot:
+Compares residual quantiles to a standard normal distribution.
+Ideal plot: points align on a straight diagonal line (slope = 1, passing through the origin).
+Deviations from this line indicate non-normality, such as heavy tails or skewness.
+Residuals vs. Fitted Values Plot:
+Checks for non-linear patterns and equal variance.
+Points should be randomly scattered around the horizontal axis (residual = 0).
+No clear patterns should be visible; patterns suggest non-linear relationships or heteroscedasticity.
+Residual spread should be consistent across fitted values; varying spread indicates heteroscedasticity.
+
+```{r }
+data <- read_csv("../IN/filtered_data.csv")
 
 str(data)
 
@@ -84,7 +179,7 @@ Each model’s ability to answer specific questions is tied to the random effect
 
 
 
-## 0. What is the average reaction time marginalizing over everything?
+## What is the average reaction time marginalizing over everything?
 ### Oa: rt ~ 1 + (1 | participant)
 Fitting this model allows you to determine how much variation in reaction times is due to individual differences between players versus random noise or other factors. A significant Player_ID variance component suggests individual differences are important; if it's close to zero, reaction times are consistent across players, and the random effect may be unnecessary.
 
@@ -109,7 +204,7 @@ Fixed Effects Intercept (Overall Average Reaction Time): The intercept estimate 
 
 Interpretation of the Model: The analysis shows small variability in reaction times due to individual differences (Player_ID) with most variance captured by the residual term. This suggests either consistent game difficulty across players or minimal variation in individual reaction times.
 
-## 1. Does learning take place?
+## Does learning take place?
 ### 1b: rt ~ 1 + time + (1 + time | participant)
 
 ```{r }
@@ -166,7 +261,7 @@ ggplot(data, aes(x = Question_Num, y = Reaction_Time)) +
 ```
 
 
-## 2. Which condition is the hardest overall?
+## Which condition is the hardest overall?
 ### 2a: rt - 1 + condition + (1 + condition | participant)
 
 1 | Player_ID: Introduces a random intercept for each player, allowing baseline reaction times to vary.
@@ -249,40 +344,6 @@ ggplot(avg_reaction_times, aes(x = Phrase_Condition, y = Avg_Reaction_Time, grou
   theme_minimal()
 ```
 
-Jorge:
-## 3. Does the version of the experiment cause different outcomes?
-
-```{r}
-model8 <- lmer(Reaction_Time ~ 1 + Game_Version + (1 | Player_ID), data = data)
-
-# Obtain and print a summary of the model to examine fixed and random effects
-print(summary(model8))
-
-#Diagnostic plots
-plot_residuals_diagnostics(model8)
-
-# Diagnostic checks - Simulating residuals to validate model assumptions
-residuals_simulation <- simulateResiduals(fittedModel = model8, n = 500)
-plot(residuals_simulation)
-
-# Model diagnostics
-check_model(model8)
-
-# Check for influential cases potentially affecting the model
-#influence_measures <- influence(model4)
-#plot(influence_measures, which = "cook")
-
-# If assumptions are not met, consider re-fitting the model with transformations or different specifications
-# model_revised <- update(model, . ~ . + log(Reaction_Time))
-# print(summary(model_revised))
-
-# Model interpretation - examining fixed and random effects
-fixed_effects <- fixef(model8)
-random_effects <- ranef(model8)
-
-```
-
-
 ## How does the effect of condition vary depending on the version?
 ### 4b: rt ~ 1 + condition * version + (1 + condition | participant)
 
@@ -355,7 +416,7 @@ plot(emm1)
 - **Practical Significance:** The model indicates that while some game versions and phrase conditions significantly affect reaction times, others do not. This can inform adjustments in game design or targeted interventions for training or improvement purposes.
 - **Model Fit and Quality:** The REML criterion and scaled residuals indicate the model fits the data well. Scaled residuals spread mostly symmetrically around zero, suggesting adequate model fit without apparent bias.
 
-## 5. Does the rate of improvement in each condition depend on the version?
+## Does the rate of improvement in each condition depend on the version?
 ### 5a: rt ~ 1 + time + condition * version + (1 + time + condition | participant)
 
 1 (Intercept): Represents the baseline reaction time for the first question and the baseline categories of Phrase_Condition and Game_Version.
