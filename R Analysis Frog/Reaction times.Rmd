@@ -47,7 +47,7 @@ plot_residuals_diagnostics <- function(model) {
 ```
 
 ```{r }
-data <- read_csv("/Users/jorgevargasmutizabal/Desktop/Frog game statistics/R Analysis Frog/IN/nat.csv")
+data <- read_csv("/Users/jorgevargasmutizabal/Desktop/Frog game statistics/R Analysis Frog/filtered_data.csv")
 
 str(data)
 

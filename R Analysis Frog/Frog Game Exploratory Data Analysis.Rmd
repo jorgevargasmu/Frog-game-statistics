@@ -23,7 +23,7 @@ library(nortest)
 ### Let's read the data in and make sure it looks normal
 
 ```{r }
-data <- read.csv("/Users/jorgevargasmutizabal/Desktop/Data/R Analysis J/IN/nat.csv")
+data <- read.csv("/Users/jorgevargasmutizabal/Desktop/Frog game statistics/R Analysis Frog/IN/nat.csv")
 summary(data)
 ```
 
