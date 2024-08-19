@@ -1,11 +1,11 @@
 ---
-title: "Accuracy"
-author: "Jorge VM"
+title: "Accuracy Logistic Regression"
+author: "Juan M Gonzlez"
 date: "2024-07-06"
 output: html_document
 ---
 
-```{r}
+```{r, setup, include=FALSE}
 library(lme4)
 library(ggplot2)
 library(performance)
@@ -14,12 +14,49 @@ library(lmerTest)
 library(tidyverse)
 library(emmeans)
 library(gridExtra)
+library(ROCR)
+
+
+
+
+# Load necessary libraries
+library(lme4)
+library(ROCR)
+
+# Define the function to plot diagnostics for logistic mixed-effects models
+plotModelDiagnostics <- function(model, data) {
+  # Deviance Residuals Plot
+  dev_res <- resid(model, type = "deviance")
+  plot(dev_res, ylim = c(min(dev_res), max(dev_res)), main = "Deviance Residuals")
+  abline(h = 0, col = "red")
+  
+  # ROC Curve and AUC calculation
+  probabilities <- predict(model, type = "response")
+  actual <- data$Answer
+  pred <- prediction(probabilities, actual)
+  perf <- performance(pred, "tpr", "fpr")
+  
+  # Plot ROC Curve
+  plot(perf, main = "ROC Curve")
+  abline(0, 1, col = "blue")  # Adding diagonal line for reference
+  
+  # Calculate AUC and display it
+  auc <- performance(pred, "auc")
+  auc_value <- auc@y.values[[1]]
+  cat("Area Under the Curve (AUC):", auc_value, "\n")
+  
+  # Simple plot just showing AUC value
+  plot(1, type = "n", axes = FALSE, xlab = "", ylab = "", main = "AUC Value")
+  text(1, 1, labels = paste("AUC =", round(auc_value, 3)), cex = 2)
+}
+
+# Example of using the function (you should already have a model fitted)
+# plotModelDiagnostics(model1, data)
 ```
 
 
 ```{r}
-data <- read_csv("filtered_data.csv")
-
+data <- read.csv("/Users/jorgevargasmutizabal/Desktop/Frog game statistics/R Analysis Frog/filtered_data.csv")
 
 data <- data %>%
   mutate(
@@ -34,404 +71,134 @@ data <- data %>%
   )
 
 # Verify changes
-
 str(data)
-
 ```
+
+# Why Logistic regression?
+
+Logistic regression is a powerful statistical tool used primarily when the outcome you're studying is binary, like yes/no or success/failure scenarios. It differs from linear regression by predicting probabilities that are constrained between 0 and 1, using a logistic function. This approach provides insights into how likely an event is to occur, offering interpretable results such as odds ratios, which describe how the likelihood of the outcome changes with different predictor variables. Logistic regression is particularly useful because it can handle non-linear relationships, include random effects to account for variability across subjects in studies like surveys or experiments, and is robust against model overfitting through techniques like regularization.
+
+## 0. Accuracy marginalizing over everything
+
+Accounting for variability among participants (participants as a random effect)
+Oa: ac ~ 1 + (1 | participant)
 
 ```{r}
-# Dataframe for learning (Accuracy over Time)
-data_learning <- data %>%
-  group_by(Player_ID, Question_Num) %>%
-  summarise(Average_Accuracy = mean(Answer), .groups = 'drop')
+# Fit a basic logistic mixed-effects model
+model0 <- glmer(Answer ~ 1 + (1 | Player_ID), data=data, family=binomial)
 
-# Dataframe for hardest condition
-data_condition <- data %>%
-  group_by(Player_ID, Phrase_Condition) %>%
-  summarise(Average_Accuracy = mean(Answer), .groups = 'drop')
+summary(model0)
 
-# Dataframe for the impact of different versions
-data_version <- data %>%
-  group_by(Player_ID, Game_Version) %>%
-  summarise(Average_Accuracy = mean(Answer), .groups = 'drop')
-
-# Dataframe for rate of improvement depending on the version and condition
-data_improvement <- data %>%
-  group_by(Player_ID, Question_Num, Phrase_Condition, Game_Version) %>%
-  summarise(Average_Accuracy = mean(Answer), .groups = 'drop')
+plotModelDiagnostics(model0, data)
 ```
-#0. Accuracy marginalizing over everything
+
+## Interpretation
+Fixed Effects
+
+Intercept (1.69897): The intercept in a logistic regression model represents the log odds of the dependent variable (correct answer, coded as 1) when all other predictors are at their reference levels. In this case, since there are no other predictors, it represents the baseline log odds of giving a correct answer for a "typical" player, accounting for random variation among players.
+Converting Log Odds to Probability: The probability of a correct answer can be calculated from the log odds using the logistic function. For the intercept of 1.69897, the probability 
+p is: = 1.698971 + 1.69897 ≈ 0.845 p= 1+e 1.69897 e 1.69897 ≈ 0.845
+This means the average probability of a correct answer across all players, adjusted for individual differences, is about 84.5%.
+
+Random Effects
+
+Player_ID (Variance: 0.1471, Std.Dev.: 0.3835): This indicates the variability in the log odds of correct answers among players. The standard deviation of 0.3835 suggests that the baseline performance in terms of log odds varies by this amount among players around the fixed effect intercept.
+Interpretation: A higher standard deviation implies greater variability in performance among players. If the standard deviation were close to zero, it would suggest that the performance across players is very similar.
+
+Deviance Residuals Plot
+Deviance residuals are a type of residual used for logistic regression that can help identify misfitting observations or regions of the data that the model does not adequately describe. Here’s what to look for in the deviance residuals plot:
+No Systematic Patterns: Ideally, you want to see a random scatter of residuals against fitted values or another variable of interest. Systematic patterns might suggest a misspecification in the model such as missing important predictors or interactions.
+Outliers: Look for extreme values in the residuals. Very large or very small residuals indicate observations that are poorly predicted by the model. These could be potential outliers or influential points that might warrant further investigation.
+Fixed Number of Possible Residuals: Each predicted probability corresponding to an actual outcome of 0 or 1 can only result in a limited set of possible residuals. This is why you see distinct bands:
+Positive Residuals (~0.5): These typically occur when the model predicts a low probability of the event (correct answer), but the actual outcome is 1 (correct). The residual calculation here reflects that the model under-predicted the probability of a correct answer.
+Negative Residuals (~-2.0): These occur when the model predicts a high probability of the event, but the actual outcome is 0 (incorrect). The residual reflects that the model over-predicted the probability of a correct answer.
+
+ROC Curve
+The ROC curve is a graphical plot that illustrates the diagnostic ability of a binary classifier system as its discrimination threshold is varied. It is created by plotting the true positive rate (sensitivity) against the false positive rate (1 - specificity) at various threshold settings. The Area Under the Curve (AUC) provides a single measure of how well the model discriminates between the two classes (correct vs. incorrect answers) across all possible thresholds:
+
+Shape of the Curve: A curve that climbs quickly towards the top-left corner of the plot indicates a model with good discriminative ability. The closer the curve follows the left-hand border and then the top border of the ROC space, the more accurate the test.
+AUC Value: The AUC ranges from 0 to 1, where 0.5 denotes a model with no discriminative ability (equivalent to random guessing), and 1 denotes perfect discrimination. An AUC closer to 1 indicates a better model. In your case, an AUC of 0.6126 suggests that the model has better than random but moderate discriminative power. Improving this could involve adding predictive features to the model or reconsidering some aspects of the model structure.
+
+##Does learning take place?
+
+1: ac - 1 + time + (1 + time | participant)
 
 ```{r}
-# Dataframe for overall average accuracy per participant
-data_ac <- data %>%
-  group_by(Player_ID) %>%
-  summarise(Average_Accuracy = mean(Answer), .groups = 'drop')
+control <- glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 1000000))
+model1 <- glmer(Answer ~ 1 + Question_Num + (1 + Question_Num | Player_ID), data = data, family = binomial, control = control)
 
-# Fit the model
-model2 <- lm(Average_Accuracy ~ 1, data = data_ac)
+summary(model1)
 
-# Obtain and print a summary of the model to examine fixed and random effects
-print(summary(model2))
-```
-```{r}
-#Diagnostic plots
-#plot_residuals_diagnostics(model2)
-plot(model2)
-```
-
-```{r}
-# Diagnostic checks - Simulating residuals to validate model assumptions
-residuals_simulation <- simulateResiduals(fittedModel = model2, n = 500)
-plot(residuals_simulation)
-```
-```{r}
-# Model diagnostics
-check_model(model2)
-```
-# If assumptions are not met, consider re-fitting the model with transformations or different specifications
-# model_revised <- update(model, . ~ . + log(Reaction_Time))
-# print(summary(model_revised))
-
-4b: ac - 1 + condition * version + (1 + condition | participant)
-
-```{r}
-# Dataframe for condition and version interaction
-data_condition_version <- data %>%
-  group_by(Player_ID, Phrase_Condition, Game_Version) %>%
-  summarise(Average_Accuracy = mean(Answer), .groups = 'drop')
-
-#This doesnt work:
-#model4 <- lmer(Average_Accuracy ~ 1 + Phrase_Condition * Game_Version + (1 + Phrase_Condition | Player_ID), data = data_condition_version)
-model4 <- lmer(Average_Accuracy ~ 1 + Phrase_Condition * Game_Version + (1 | Player_ID), data = data_condition_version)
-
-# Obtain and print a summary of the model to examine fixed and random effects
-print(summary(model4))
-```
-## 
-## Correlation matrix not shown by default, as p = 16 > 12.
-## Use print(summary(model4), correlation=TRUE)  or
-##     vcov(summary(model4))        if you need it
-
-```{r}
-#Diagnostic plots
-plot_residuals_diagnostics(model4)
-```
-## `geom_smooth()` using formula = 'y ~ x'
-
-```{r}
-# Diagnostic checks - Simulating residuals to validate model assumptions
-residuals_simulation <- simulateResiduals(fittedModel = model4, n = 500)
-plot(residuals_simulation)
+plotModelDiagnostics(model1, data)
 
 ```
 
-```{r}
-# Model diagnostics
-check_model(model4)
-```
+
+## 2. Which condition is hardest overall?
+
+2: ac - 1 + condition + (1 + condition | participant)
 
 
 ```{r}
-# Check for influential cases potentially affecting the model
-#influence_measures <- influence(model4)
-#plot(influence_measures, which = "cook")
+control <- glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 1000000))
+model2 <- glmer(Answer ~ 1 + Phrase_Condition + (1 + Phrase_Condition | Player_ID), data = data, family = binomial, control = control)
 
-# If assumptions are not met, consider re-fitting the model with transformations or different specifications
-# model_revised <- update(model, . ~ . + log(Reaction_Time))
-# print(summary(model_revised))
 
-# Model interpretation - examining fixed and random effects
-fixed_effects <- fixef(model4)
-random_effects <- ranef(model4)
+# Output the summary of the model to see the results
+summary(model2)
 
-# Printing fixed effects for interpretation
-print(fixed_effects)
+plotModelDiagnostics(model2, data)
 ```
+## Interpretation
 
-#check above result, different from the other one. 
+Model Output Interpretation
+Fixed Effects: The coefficients for Phrase_Condition2, Phrase_Condition3, and Phrase_Condition4 are significant, with negative signs indicating these conditions are associated with lower odds of a correct answer compared to the baseline condition (Phrase_Condition1).
+Phrase_Condition4 shows the largest negative coefficient (-2.7357), suggesting it is the hardest condition, as it substantially decreases the odds of a correct answer.
+Random Effects: There is considerable variability in intercepts and slopes for Phrase_Condition across players. The standard deviations are significant, indicating variability in player responses to different conditions.
+Correlations: The correlations between intercepts and slopes (for different conditions) are notable, especially between Phrase_Condition4 and the intercept, suggesting that players who find the baseline condition easier or harder tend to also find Phrase_Condition4 proportionally easier or harder.
+AUC (Area Under the Curve)
+The AUC of 0.7629 indicates good discriminative ability of the model to distinguish between correct and incorrect answers. This value is quite satisfactory, suggesting that the model does a good job overall in classifying the outcomes based on the conditions and individual player effects.
+
+
+You can do this with pretty much any other mode. Keep in mind that you have to do log conversion of the probabilities.
+
+##Does the version of the experiment cause different outcomes?
+
+ac - 1 + version + ((1 | participant)
 
 ```{r}
-# Printing random effects for interpretation
-print(random_effects)
+control <- glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 1000000))
+model3 <- glmer(Answer ~ 1 + Game_Version + (1 | Player_ID), data = data, family = binomial, control = control)
+
+
+summary(model3)
+
+plotModelDiagnostics(model3, data)
 ```
+
+##Hoes does the effect of condition vary depending on the version?
+
+ac - 1 + condition * version + (1 + condition | participant)
 
 ```{r}
-# Conducting pairwise comparisons of phrase conditions using estimated marginal means
-emm_results <- emmeans(model4, specs = pairwise ~ Phrase_Condition)
+control <- glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 1000000))
+model4 <- glmer(Answer ~ 1 + Phrase_Condition * Game_Version + (1 | Player_ID), data = data, family = binomial, control = control)
+
+summary(model4)
+
+plotModelDiagnostics(model4, data)
+
 ```
+
+Does the rate of improvement in each condition depend on the version?
+##ac - 1 + time + condition * version + (1 + time + condition | participant)
 
 ```{r}
-print(summary(emm_results))
-```
-## 0. What is the average reaction time marginalizing over everything?
+control <- glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 1000000))
+model5 <- glmer(Answer ~ 1 + Question_Num + Phrase_Condition * Game_Version + (1 | Player_ID), data = data, family = binomial, control = control)
 
-```{r }
-model1 <- lmer(Average_Accuracy ~ 1 + (1 | Player_ID), data_ac)
+summary(model5)
 
-
-#Error: number of levels of each grouping factor must be < number of observations (problems: Player_ID)
-
-# Obtain and print a summary of the model to examine fixed and random effects
-print(summary(model1))
-
-#Diagnostic plots
-plot_residuals_diagnostics(model1)
-
-# Model diagnostics
-check_model(model1)
+plotModelDiagnostics(model5, data)
 ```
 
-## 1. Does learning take place?
-```{r }
-model2 <- lmer(Average_Accuracy ~ 1 + Question_Num + (1 + Question_Num | Player_ID), data_learning)
-
-# Obtain and print a summary of the model to examine fixed and random effects
-print(summary(model2))
-
-#Diagnostic plots
-plot_residuals_diagnostics(model2)
-
-# Diagnostic checks - Simulating residuals to validate model assumptions
-residuals_simulation <- simulateResiduals(fittedModel = model2, n = 500)
-plot(residuals_simulation)
-
-# Model diagnostics
-check_model(model2)
-
-# Check for influential cases potentially affecting the model
-#influence_measures <- influence(model3)
-#plot(influence_measures, which = "cook")
-
-# If assumptions are not met, consider re-fitting the model with transformations or different specifications
-# model_revised <- update(model, . ~ . + log(Reaction_Time))
-# print(summary(model_revised))
-
-# Model interpretation - examining fixed and random effects
-#fixed_effects <- fixef(model3)
-#random_effects <- ranef(model3)
-
-# Printing fixed effects for interpretation
-#print(fixed_effects)
-
-# Printing random effects for interpretation
-#print(random_effects)
-
-# Get estimated marginal means for specific values of Question_Num
-emm_results <- emmeans(model2, specs = ~ Question_Num, at = list(Question_Num = seq(min(data$Question_Num), max(data$Question_Num), by = 10)))
-
-# Summarize the results
-summary(emm_results)
-
-# Plot the estimated marginal means
-plot(emm_results)
-
-
-```
-```{r }
-# Create a plot of Average_Accuracy vs. Question_Num with a regression line
-ggplot(data_learning, aes(x = Question_Num, y = Average_Accuracy)) +
-  geom_point(alpha = 0.3) +
-  geom_smooth(method = "lm", se = TRUE, color = "blue") +
-  labs(title = "Average Accuracy vs. Question Number",
-       x = "Question Number",
-       y = "Average_Accuracy")
-```
-## 2. Which condition is the hardest overall?
-
-```{r }
-#model3 <- lmer(Average_Accuracy ~ 1 + Phrase_Condition + (1 + Phrase_Condition | Player_ID), data_condition) - error
-
-model3 <- lmer(Average_Accuracy ~ 1 + (1 + Phrase_Condition | Player_ID), data_condition)
-
-#Error: number of observations (=152) <= number of random effects (=152) for term (1 + Phrase_Condition | Player_ID); the random-effects parameters and the residual variance (or scale parameter) are probably unidentifiable
-
-# Obtain and print a summary of the model to examine fixed and random effects
-print(summary(model3))
-
-#Diagnostic plots
-plot_residuals_diagnostics(model3)
-
-# Diagnostic checks - Simulating residuals to validate model assumptions
-residuals_simulation <- simulateResiduals(fittedModel = model3, n = 500)
-plot(residuals_simulation)
-
-# Model diagnostics
-check_model(model3)
-
-# Check for influential cases potentially affecting the model
-#influence_measures <- influence(model3)
-#plot(influence_measures, which = "cook")
-
-# If assumptions are not met, consider re-fitting the model with transformations or different specifications
-# model_revised <- update(model, . ~ . + log(Reaction_Time))
-# print(summary(model_revised))
-
-# Model interpretation - examining fixed and random effects
-#fixed_effects <- fixef(model3)
-#random_effects <- ranef(model3)
-
-# Printing fixed effects for interpretation
-#print(fixed_effects)
-
-# Printing random effects for interpretation
-#print(random_effects)
-
-# Conducting pairwise comparisons of phrase conditions using estimated marginal means
-emm_results <- emmeans(model3, specs = ~ Phrase_Condition)
-summary(emm_results)
-pairwise_comparisons <- emmeans(model3, specs = pairwise ~ Phrase_Condition)
-summary(pairwise_comparisons)
-plot(emm_results)
-```
-
-```{r }
-# Create a boxplot
-ggplot(data_condition, aes(x = Phrase_Condition, y = Average_Accuracy, fill = Phrase_Condition)) +
-  geom_boxplot() +
-  labs(title = "Average Accuracy by Phrase Condition", x = "Phrase Condition", y = "Accuracy (seconds)") +
-  theme_minimal()
-```
-
-```{r }
-# Calculate average acc per player per condition
-avg_reaction_times <- data %>%
-  group_by(Player_ID, Phrase_Condition) %>%
-  summarise(Avg_Reaction_Time = mean(Reaction_Time), .groups = 'drop')
-
-# Interaction plot
-ggplot(avg_reaction_times, aes(x = Phrase_Condition, y = Avg_Reaction_Time, group = Player_ID, color = Phrase_Condition)) +
-  geom_line(alpha = 0.5) +  # Slightly transparent to see overlapping lines
-  geom_point() +
-  labs(title = "Interaction of Phrase Condition and Player on Reaction Times", x = "Phrase Condition", y = "Average Reaction Time (seconds)") +
-  theme_minimal()
-```
-
-## 3. Does the version of the experiment cause different outcomes?
-```{r}
-model8 <- lmer(Average_Accuracy ~ 1 + Game_Version + (1 | Player_ID), data_version, control=lmerControl(check.nobs.vs.nlev = "ignore",
-     check.nobs.vs.rankZ = "ignore",
-     check.nobs.vs.nRE="ignore"))
-
-# Obtain and print a summary of the model to examine fixed and random effects
-print(summary(model8))
-
-#Diagnostic plots
-plot_residuals_diagnostics(model8)
-
-# Diagnostic checks - Simulating residuals to validate model assumptions
-residuals_simulation <- simulateResiduals(fittedModel = model8, n = 500)
-plot(residuals_simulation)
-
-# Model diagnostics
-check_model(model8)
-
-# Check for influential cases potentially affecting the model
-#influence_measures <- influence(model4)
-#plot(influence_measures, which = "cook")
-
-# If assumptions are not met, consider re-fitting the model with transformations or different specifications
-# model_revised <- update(model, . ~ . + log(Reaction_Time))
-# print(summary(model_revised))
-
-# Model interpretation - examining fixed and random effects
-fixed_effects <- fixef(model8)
-random_effects <- ranef(model8)
-
-```
-
-## 4. How does the effect of condition vary depending on the version?
-
-```{r }
-#This doesnt work:
-#model4 <- lmer(Average_Accuracy ~ 1 + Phrase_Condition * Game_Version + (1 + Phrase_Condition | Player_ID), data = data)
-
-model4 <- lmer(Average_Accuracy ~ 1 + Phrase_Condition * Game_Version + (1 | Player_ID), data_condition_version)
-
-# Obtain and print a summary of the model to examine fixed and random effects
-print(summary(model4))
-
-#Diagnostic plots
-plot_residuals_diagnostics(model4)
-
-# Diagnostic checks - Simulating residuals to validate model assumptions
-residuals_simulation <- simulateResiduals(fittedModel = model4, n = 500)
-plot(residuals_simulation)
-
-# Model diagnostics
-check_model(model4)
-
-# Check for influential cases potentially affecting the model
-#influence_measures <- influence(model4)
-#plot(influence_measures, which = "cook")
-
-# If assumptions are not met, consider re-fitting the model with transformations or different specifications
-# model_revised <- update(model, . ~ . + log(Reaction_Time))
-# print(summary(model_revised))
-
-# Model interpretation - examining fixed and random effects
-fixed_effects <- fixef(model4)
-random_effects <- ranef(model4)
-
-# Printing fixed effects for interpretation
-print(fixed_effects)
-
-# Printing random effects for interpretation
-print(random_effects)
-
-# Estimate marginal means for all combinations
-emm1 <- emmeans(model4, specs = ~ Phrase_Condition * Game_Version)
-summary(emm1)
-
-# Pairwise comparisons across phrase conditions within each game version
-pairs(emm1, simple = "each")
-
-plot(emm1)
-```
-
-## 5. Does the rate of improvement in each condition depend on the version?
-```{r }
-model5 <- lmer(Average_Accuracy ~ 1 + Question_Num + Phrase_Condition * Game_Version + (1 | Player_ID), data_improvement)
-
-# Obtain and print a summary of the model to examine fixed and random effects
-print(summary(model5))
-
-#Diagnostic plots
-plot_residuals_diagnostics(model5)
-
-# Diagnostic checks - Simulating residuals to validate model assumptions
-residuals_simulation <- simulateResiduals(fittedModel = model5, n = 500)
-plot(residuals_simulation)
-
-# Model diagnostics
-check_model(model5)
-
-# Check for influential cases potentially affecting the model
-#influence_measures <- influence(model5)
-#plot(influence_measures, which = "cook")
-
-# If assumptions are not met, consider re-fitting the model with transformations or different specifications
-# model_revised <- update(model, . ~ . + log(Reaction_Time))
-# print(summary(model_revised))
-
-# Model interpretation - examining fixed and random effects
-fixed_effects <- fixef(model5)
-random_effects <- ranef(model5)
-
-# Printing fixed effects for interpretation
-print(fixed_effects)
-
-# Printing random effects for interpretation
-print(random_effects)
-
-# Estimate marginal means at various levels of Question_Num
-emm2 <- emmeans(model5, specs = ~ Phrase_Condition * Game_Version, at = list(Question_Num = c(1, 10, 20)))
-summary(emm2)
-
-# Trend analysis
-trend_analysis <- emtrends(model5, specs = ~ Phrase_Condition * Game_Version, var = "Question_Num")
-summary(trend_analysis)
-
-plot(emm2)
-
-```

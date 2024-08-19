@@ -1,0 +1,894 @@
+---
+title: "Round2_Analysis_conditions&levels"
+author: "JMG"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# Load the dplyr library
+library(ggplot2)
+library(performance)
+library(DHARMa)
+library(lmerTest)
+library(tidyverse)
+library(emmeans)
+library(gridExtra)
+library(ROCR)
+library(lme4)
+
+
+
+plot_residuals_diagnostics <- function(model) {
+  # Ensure the model is of class 'merMod' from lme4 package
+  if (!inherits(model, "merMod")) {
+    stop("The provided model is not a valid 'merMod' object from lme4.")
+  }
+  
+  # Create a dataframe of residuals and fitted values from the model
+  residuals_df <- data.frame(
+    Residuals = residuals(model),
+    Fitted = fitted(model)
+  )
+  
+  # Plot histogram of residuals
+  p1 <- ggplot(residuals_df, aes(x = Residuals)) +
+    geom_histogram(bins = 30, fill = "blue", color = "black") +
+    labs(title = "Histogram of Residuals", x = "Residuals", y = "Frequency")
+  print(p1)
+  
+  # QQ plot for checking normality of residuals
+  qqnorm(residuals_df$Residuals)
+  qqline(residuals_df$Residuals, col = "red", lwd = 2)
+  
+  # Plot of residuals vs. fitted values
+  p3 <- ggplot(residuals_df, aes(x = Fitted, y = Residuals)) +
+    geom_point() +
+    geom_smooth(method = "lm", col = "red") +
+    labs(title = "Residuals vs. Fitted Values", x = "Fitted Values", y = "Residuals")
+  print(p3)
+}
+```
+
+## Como los tiempos de reaction (RT) y accuracy (ACC) fueron progresando a medida en que los jugadores completaron los niveles
+
+###De manera general sin importar las versiones.
+
+### Reaction times: Condition 1 
+
+```{r cars}
+data <- read.csv("/Users/jorgevargasmutizabal/Desktop/Frog game statistics/R Analysis Frog/filtered_data.csv")
+
+# Filter the data for Phrase_Condition == 1
+filtered_data <- data %>%
+  filter(Phrase_Condition == 1)
+
+# Hard-code Rounds based on version and level
+filtered_data <- filtered_data %>%
+  mutate(Rounds = case_when(
+    Game_Version == 1 & Game_Level == 1 ~ 1,
+    Game_Version == 1 & Game_Level == 3 ~ 2,
+    Game_Version == 1 & Game_Level == 7 ~ 3,
+    Game_Version == 1 & Game_Level == 8 ~ 4,
+    Game_Version == 2 & Game_Level == 5 ~ 1,
+    Game_Version == 2 & Game_Level == 6 ~ 2,
+    Game_Version == 2 & Game_Level == 7 ~ 3,
+    Game_Version == 2 & Game_Level == 8 ~ 4,
+    Game_Version == 3 & Game_Level == 4 ~ 1,
+    Game_Version == 3 & Game_Level == 6 ~ 2,
+    Game_Version == 3 & Game_Level == 7 ~ 3,
+    Game_Version == 3 & Game_Level == 8 ~ 4,
+    Game_Version == 4 & Game_Level == 2 ~ 1,
+    Game_Version == 4 & Game_Level == 3 ~ 2,
+    Game_Version == 4 & Game_Level == 7 ~ 3,
+    Game_Version == 4 & Game_Level == 8 ~ 4,
+    TRUE ~ NA_integer_
+  ))
+
+
+# Assuming your data frame is named df
+summary_table <- filtered_data %>%
+  group_by(Game_Version, Game_Level, Rounds) %>%
+  summarise(Count = n(), .groups = 'drop')
+
+print(summary_table)
+
+#total number of conditions instance by level
+filtered_data %>%
+  group_by(Rounds) %>%
+  summarise(Count = n())
+
+filtered_data <- filtered_data %>%
+  mutate(
+    Player_ID = as.factor(Player_ID),          # Convert to factor
+    LexTale = as.numeric(LexTale),              # Convert to numeric
+    Game_Version = as.factor(Game_Version),     # Convert to factor
+    Game_Level = as.numeric(Game_Level),        # Convert to factor
+    Phrase_Condition = as.factor(Phrase_Condition), # Convert to factor
+    Question_Num = as.numeric(Question_Num),    # Convert to numeric
+    Answer = as.numeric(Answer),                 # Convert to factor
+    Reaction_Time = as.numeric(Reaction_Time),   # Convert to numeric
+    Rounds = as.numeric(Rounds)   # Convert to numeric
+  )
+```
+
+### Fit the Reaction Time model
+
+```{r }
+# Fit the model with Game_Level as a numeric predictor
+model0 <- lmer(Reaction_Time ~ 1 + Rounds + (1 | Player_ID), data = filtered_data)
+
+# Print a summary of the model to examine fixed and random effects
+print(summary(model0))
+
+# Diagnostic plots for residuals - Adjusted for typical visualization tools in R
+plot(model0)
+
+# Additional model diagnostics from the 'performance' package
+check_model(model0)  # This function will check various model assumptions and fit indices
+
+# Estimate marginal means at specific points along the Rounds
+# You would need to know the range or specific points of interest.
+# For example, if Game_Level ranges from 1 to 10, you might choose points like 1, 5, and 10.
+emm0 <- emmeans(model0, specs = ~ Rounds, at = list(Rounds = c(1, 2,3,4)))
+
+# Convert the summary to a data frame
+emm0_df <- as.data.frame(summary(emm0))
+
+# Then, you can plot these points as before:
+emm_plot <- ggplot(emm0_df, aes(x = Rounds, y = emmean)) +
+  geom_point() +  # Add points for each estimated marginal mean
+  geom_line() +  # Connect the points with a line to show trends
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.1) +  # Add error bars for confidence intervals
+  labs(title = "Estimated Marginal Means of Reaction Time by Rounds",
+       x = "Rounds",
+       y = "Estimated Marginal Mean Reaction Time") +
+  theme_minimal()  # Use a minimal theme for a clean look
+
+# Print the plot
+print(emm_plot)
+
+# Trend analysis for numeric Game_Level
+# Assuming trend_analysis is already obtained and contains the trend estimate
+# Determine the range of Game_Level you want to visualize
+rounds <- seq(min(filtered_data$Rounds), max(filtered_data$Rounds), by = 1)
+
+# Retrieve the actual coefficient for Rounds from the model
+coef_estimate_for_rounds <- coef(summary(model0))['Rounds', 'Estimate'] 
+
+# Calculate predicted reaction times based on the actual model coefficient
+predicted_reaction_times <- coef_estimate_for_rounds * rounds + coef(summary(model0))["(Intercept)", "Estimate"]
+
+# Create a dataframe for plotting
+trend_data <- data.frame(Rounds = rounds, Predicted_Reaction_Time = predicted_reaction_times)
+
+# Plotting the trend
+trend_plot <- ggplot(trend_data, aes(x = Rounds, y = Predicted_Reaction_Time)) +
+  geom_line(color = "blue") +
+  labs(title = "Trend of Reaction Time Across Rounds",
+       x = "Rounds",
+       y = "Predicted Reaction Time") +
+  theme_minimal()
+
+# Print the plot
+print(trend_plot)
+```
+### Cond 1. Accuracy 
+### Same thing but for Answer(accuracy) (binomial variable but logistic regression)
+```{r }
+# Fit the model using glmer for a binary response
+model0 <- glmer(Answer ~ 1 + Rounds + (1 | Player_ID), data = filtered_data, family = binomial)
+
+# Print a summary of the model to examine fixed and random effects
+print(summary(model0))
+
+# Simulate residuals using DHARMa
+simulationOutput <- simulateResiduals(fittedModel = model0, n = 250)
+
+# Create diagnostic plots
+plot(simulationOutput)
+plotResiduals(simulationOutput)
+plot(simulationOutput, type = "uniform")
+plot(simulationOutput, type = "acf")
+
+# Estimate marginal means at specific points along the Rounds
+emm1 <- emmeans(model0, specs = ~ Rounds, at = list(Rounds = c(1, 2, 3, 4)), type = "response")
+emm1_df <- as.data.frame(summary(emm1))
+
+# Plot these points
+emm_plot1 <- ggplot(emm1_df, aes(x = Rounds, y = prob)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.1) +
+  labs(title = "Estimated Marginal Probabilities of Answer = 1 by Rounds",
+       x = "Rounds",
+       y = "Probability of Answer = 1") +
+  theme_minimal()
+print(emm_plot1)
+
+# Trend analysis for Rounds
+trend_analysis1 <- emtrends(model0, specs = ~ Rounds, var = "Rounds")
+
+# Calculate and plot predicted probabilities across Rounds
+rounds <- seq(min(filtered_data$Rounds), max(filtered_data$Rounds), by = 1)
+predicted_probs <- predict(model0, newdata = data.frame(Rounds = rounds), type = "response", re.form = NA)
+
+trend_data1 <- data.frame(Rounds = rounds, Predicted_Probability = predicted_probs)
+trend_plot1 <- ggplot(trend_data1, aes(x = Rounds, y = Predicted_Probability)) +
+  geom_line(color = "blue") +
+  labs(title = "Trend of Probability of Answer = 1 Across Rounds",
+       x = "Rounds",
+       y = "Predicted Probability") +
+  theme_minimal()
+print(trend_plot1)
+
+```
+
+###Cond 2. Reaction time
+```{r }
+
+data <- read.csv("/Users/jorgevargasmutizabal/Desktop/Frog game statistics/R Analysis Frog/filtered_data.csv")
+
+# Filter the data for Phrase_Condition == 2
+filtered_data <- data %>%
+  filter(Phrase_Condition == 2)
+
+# Hard-code Rounds based on version and level
+filtered_data <- filtered_data %>%
+  mutate(Rounds = case_when(
+    Game_Version == 1 & Game_Level == 2 ~ 1,
+    Game_Version == 1 & Game_Level == 3 ~ 2,
+    Game_Version == 1 & Game_Level == 7 ~ 3,
+    Game_Version == 1 & Game_Level == 8 ~ 4,
+    Game_Version == 2 & Game_Level == 1 ~ 1,
+    Game_Version == 2 & Game_Level == 3 ~ 2,
+    Game_Version == 2 & Game_Level == 7 ~ 3,
+    Game_Version == 2 & Game_Level == 8 ~ 4,
+    Game_Version == 3 & Game_Level == 5 ~ 1,
+    Game_Version == 3 & Game_Level == 6 ~ 2,
+    Game_Version == 3 & Game_Level == 7 ~ 3,
+    Game_Version == 3 & Game_Level == 8 ~ 4,
+    Game_Version == 4 & Game_Level == 4 ~ 1,
+    Game_Version == 4 & Game_Level == 6 ~ 2,
+    Game_Version == 4 & Game_Level == 7 ~ 3,
+    Game_Version == 4 & Game_Level == 8 ~ 4,
+    TRUE ~ NA_integer_
+  ))
+
+
+# Assuming your data frame is named df
+summary_table <- filtered_data %>%
+  group_by(Game_Version, Game_Level, Rounds) %>%
+  summarise(Count = n(), .groups = 'drop')
+
+print(summary_table)
+
+#total number of conditions instance by level
+filtered_data %>%
+  group_by(Rounds) %>%
+  summarise(Count = n())
+
+filtered_data <- filtered_data %>%
+  mutate(
+    Player_ID = as.factor(Player_ID),          # Convert to factor
+    LexTale = as.numeric(LexTale),              # Convert to numeric
+    Game_Version = as.factor(Game_Version),     # Convert to factor
+    Game_Level = as.numeric(Game_Level),        # Convert to factor
+    Phrase_Condition = as.factor(Phrase_Condition), # Convert to factor
+    Question_Num = as.numeric(Question_Num),    # Convert to numeric
+    Answer = as.numeric(Answer),                 # Convert to factor
+    Reaction_Time = as.numeric(Reaction_Time),   # Convert to numeric
+    Rounds = as.numeric(Rounds)   # Convert to numeric
+  )
+```
+#Fitting cond. 2 R.T
+
+```{r }
+# Fit the model with Game_Level as a numeric predictor
+model1 <- lmer(Reaction_Time ~ 1 + Rounds + (1 | Player_ID), data = filtered_data)
+
+# Print a summary of the model to examine fixed and random effects
+print(summary(model1))
+
+# Diagnostic plots for residuals - Adjusted for typical visualization tools in R
+plot(model1)
+
+# Additional model diagnostics from the 'performance' package
+check_model(model1)  # This function will check various model assumptions and fit indices
+
+# Estimate marginal means at specific points along the Rounds
+# You would need to know the range or specific points of interest.
+# For example, if Game_Level ranges from 1 to 10, you might choose points like 1, 5, and 10.
+emm0 <- emmeans(model1, specs = ~ Rounds, at = list(Rounds = c(1,2,3,4)))
+
+# Convert the summary to a data frame
+emm0_df <- as.data.frame(summary(emm0))
+
+# Then, you can plot these points as before:
+emm_plot <- ggplot(emm0_df, aes(x = Rounds, y = emmean)) +
+  geom_point() +  # Add points for each estimated marginal mean
+  geom_line() +  # Connect the points with a line to show trends
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.1) +  # Add error bars for confidence intervals
+  labs(title = "Estimated Marginal Means of Reaction Time by Rounds",
+       x = "Rounds",
+       y = "Estimated Marginal Mean Reaction Time") +
+  theme_minimal()  # Use a minimal theme for a clean look
+
+# Print the plot
+print(emm_plot)
+
+# Trend analysis for numeric Game_Level
+# Assuming trend_analysis is already obtained and contains the trend estimate
+# Determine the range of Game_Level you want to visualize
+rounds <- seq(min(filtered_data$Rounds), max(filtered_data$Rounds), by = 1)
+
+# Retrieve the actual coefficient for Rounds from the model
+coef_estimate_for_rounds <- coef(summary(model0))['Rounds', 'Estimate'] 
+
+# Calculate predicted reaction times based on the actual model coefficient
+predicted_reaction_times <- coef_estimate_for_rounds * rounds + coef(summary(model1))["(Intercept)", "Estimate"]
+
+# Create a dataframe for plotting
+trend_data <- data.frame(Rounds = rounds, Predicted_Reaction_Time = predicted_reaction_times)
+
+# Plotting the trend
+trend_plot <- ggplot(trend_data, aes(x = Rounds, y = Predicted_Reaction_Time)) +
+  geom_line(color = "blue") +
+  labs(title = "Trend of Reaction Time Across Rounds",
+       x = "Rounds",
+       y = "Predicted Reaction Time") +
+  theme_minimal()
+
+# Print the plot
+print(trend_plot)
+```
+
+###Accuracy cond. 2 
+```{r }
+# Fit the model using glmer for a binary response
+model1 <- glmer(Answer ~ 1 + Rounds + (1 | Player_ID), data = filtered_data, family = binomial)
+
+# Print a summary of the model to examine fixed and random effects
+print(summary(model1))
+
+# Simulate residuals using DHARMa
+simulationOutput <- simulateResiduals(fittedModel = model1, n = 250)
+
+# Create diagnostic plots
+plot(simulationOutput)
+plotResiduals(simulationOutput)
+plot(simulationOutput, type = "uniform")
+plot(simulationOutput, type = "acf")
+
+# Estimate marginal means at specific points along the Rounds
+emm1 <- emmeans(model1, specs = ~ Rounds, at = list(Rounds = c(1, 2, 3, 4)), type = "response")
+emm1_df <- as.data.frame(summary(emm1))
+
+# Plot these points
+emm_plot1 <- ggplot(emm1_df, aes(x = Rounds, y = prob)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.1) +
+  labs(title = "Estimated Marginal Probabilities of Answer = 1 by Rounds",
+       x = "Rounds",
+       y = "Probability of Answer = 1") +
+  theme_minimal()
+print(emm_plot1)
+
+# Trend analysis for Rounds
+trend_analysis1 <- emtrends(model1, specs = ~ Rounds, var = "Rounds")
+
+# Calculate and plot predicted probabilities across Rounds
+rounds <- seq(min(filtered_data$Rounds), max(filtered_data$Rounds), by = 1)
+predicted_probs <- predict(model1, newdata = data.frame(Rounds = rounds), type = "response", re.form = NA)
+
+trend_data1 <- data.frame(Rounds = rounds, Predicted_Probability = predicted_probs)
+trend_plot1 <- ggplot(trend_data1, aes(x = Rounds, y = Predicted_Probability)) +
+  geom_line(color = "blue") +
+  labs(title = "Trend of Probability of Answer = 1 Across Rounds",
+       x = "Rounds",
+       y = "Predicted Probability") +
+  theme_minimal()
+print(trend_plot1)
+
+```
+
+# Condition 3: Reaction time
+```{r }
+data <- read.csv("/Users/jorgevargasmutizabal/Desktop/Frog game statistics/R Analysis Frog/filtered_data.csv")
+
+# Filter the data for Phrase_Condition == 3
+filtered_data <- data %>%
+  filter(Phrase_Condition == 3)
+
+# Hard-code Rounds based on version and level
+filtered_data <- filtered_data %>%
+  mutate(Rounds = case_when(
+    Game_Version == 1 & Game_Level == 4 ~ 1,
+    Game_Version == 1 & Game_Level == 6 ~ 2,
+    Game_Version == 1 & Game_Level == 7 ~ 3,
+    Game_Version == 1 & Game_Level == 8 ~ 4,
+    Game_Version == 2 & Game_Level == 2 ~ 1,
+    Game_Version == 2 & Game_Level == 3 ~ 2,
+    Game_Version == 2 & Game_Level == 7 ~ 3,
+    Game_Version == 2 & Game_Level == 8 ~ 4,
+    Game_Version == 3 & Game_Level == 1 ~ 1,
+    Game_Version == 3 & Game_Level == 3 ~ 2,
+    Game_Version == 3 & Game_Level == 7 ~ 3,
+    Game_Version == 3 & Game_Level == 8 ~ 4,
+    Game_Version == 4 & Game_Level == 5 ~ 1,
+    Game_Version == 4 & Game_Level == 6 ~ 2,
+    Game_Version == 4 & Game_Level == 7 ~ 3,
+    Game_Version == 4 & Game_Level == 8 ~ 4,
+    TRUE ~ NA_integer_
+  ))
+
+
+# Assuming your data frame is named df
+summary_table <- filtered_data %>%
+  group_by(Game_Version, Game_Level, Rounds) %>%
+  summarise(Count = n(), .groups = 'drop')
+
+print(summary_table)
+
+#total number of conditions instance by level
+filtered_data %>%
+  group_by(Rounds) %>%
+  summarise(Count = n())
+
+filtered_data <- filtered_data %>%
+  mutate(
+    Player_ID = as.factor(Player_ID),          # Convert to factor
+    LexTale = as.numeric(LexTale),              # Convert to numeric
+    Game_Version = as.factor(Game_Version),     # Convert to factor
+    Game_Level = as.numeric(Game_Level),        # Convert to factor
+    Phrase_Condition = as.factor(Phrase_Condition), # Convert to factor
+    Question_Num = as.numeric(Question_Num),    # Convert to numeric
+    Answer = as.numeric(Answer),                 # Convert to factor
+    Reaction_Time = as.numeric(Reaction_Time),   # Convert to numeric
+    Rounds = as.numeric(Rounds)   # Convert to numeric
+  )
+```
+
+##fitting cond. 3 
+```{r }
+# Fit the model with Game_Level as a numeric predictor
+model2 <- lmer(Reaction_Time ~ 1 + Rounds + (1 | Player_ID), data = filtered_data)
+
+# Print a summary of the model to examine fixed and random effects
+print(summary(model2))
+
+# Diagnostic plots for residuals - Adjusted for typical visualization tools in R
+plot(model2)
+
+# Additional model diagnostics from the 'performance' package
+check_model(model2)  # This function will check various model assumptions and fit indices
+
+# Estimate marginal means at specific points along the Rounds
+# You would need to know the range or specific points of interest.
+# For example, if Game_Level ranges from 1 to 10, you might choose points like 1, 5, and 10.
+emm0 <- emmeans(model0, specs = ~ Rounds, at = list(Rounds = c(1, 2,3,4)))
+
+# Convert the summary to a data frame
+emm0_df <- as.data.frame(summary(emm0))
+
+# Then, you can plot these points as before:
+emm_plot <- ggplot(emm0_df, aes(x = Rounds, y = emmean)) +
+  geom_point() +  # Add points for each estimated marginal mean
+  geom_line() +  # Connect the points with a line to show trends
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.1) +  # Add error bars for confidence intervals
+  labs(title = "Estimated Marginal Means of Reaction Time by Rounds",
+       x = "Rounds",
+       y = "Estimated Marginal Mean Reaction Time") +
+  theme_minimal()  # Use a minimal theme for a clean look
+
+# Print the plot
+print(emm_plot)
+
+# Trend analysis for numeric Game_Level
+# Assuming trend_analysis is already obtained and contains the trend estimate
+# Determine the range of Game_Level you want to visualize
+rounds <- seq(min(filtered_data$Rounds), max(filtered_data$Rounds), by = 1)
+
+# Retrieve the actual coefficient for Rounds from the model
+coef_estimate_for_rounds <- coef(summary(model0))['Rounds', 'Estimate'] 
+
+# Calculate predicted reaction times based on the actual model coefficient
+predicted_reaction_times <- coef_estimate_for_rounds * rounds + coef(summary(model0))["(Intercept)", "Estimate"]
+
+# Create a dataframe for plotting
+trend_data <- data.frame(Rounds = rounds, Predicted_Reaction_Time = predicted_reaction_times)
+
+# Plotting the trend
+trend_plot <- ggplot(trend_data, aes(x = Rounds, y = Predicted_Reaction_Time)) +
+  geom_line(color = "blue") +
+  labs(title = "Trend of Reaction Time Across Rounds",
+       x = "Rounds",
+       y = "Predicted Reaction Time") +
+  theme_minimal()
+
+# Print the plot
+print(trend_plot)
+```
+#Cond. 3 Accuracy
+```{r }
+# Fit the model using glmer for a binary response
+model2 <- glmer(Answer ~ 1 + Rounds + (1 | Player_ID), data = filtered_data, family = binomial)
+
+# Print a summary of the model to examine fixed and random effects
+print(summary(model1))
+
+# Simulate residuals using DHARMa
+simulationOutput <- simulateResiduals(fittedModel = model2, n = 250)
+
+# Create diagnostic plots
+plot(simulationOutput)
+plotResiduals(simulationOutput)
+plot(simulationOutput, type = "uniform")
+plot(simulationOutput, type = "acf")
+
+# Estimate marginal means at specific points along the Rounds
+emm1 <- emmeans(model2, specs = ~ Rounds, at = list(Rounds = c(1, 2, 3, 4)), type = "response")
+emm1_df <- as.data.frame(summary(emm1))
+
+# Plot these points
+emm_plot1 <- ggplot(emm1_df, aes(x = Rounds, y = prob)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.1) +
+  labs(title = "Estimated Marginal Probabilities of Answer = 1 by Rounds",
+       x = "Rounds",
+       y = "Probability of Answer = 1") +
+  theme_minimal()
+print(emm_plot1)
+
+# Trend analysis for Rounds
+trend_analysis1 <- emtrends(model2, specs = ~ Rounds, var = "Rounds")
+
+# Calculate and plot predicted probabilities across Rounds
+rounds <- seq(min(filtered_data$Rounds), max(filtered_data$Rounds), by = 1)
+predicted_probs <- predict(model1, newdata = data.frame(Rounds = rounds), type = "response", re.form = NA)
+
+trend_data1 <- data.frame(Rounds = rounds, Predicted_Probability = predicted_probs)
+trend_plot1 <- ggplot(trend_data1, aes(x = Rounds, y = Predicted_Probability)) +
+  geom_line(color = "blue") +
+  labs(title = "Trend of Probability of Answer = 1 Across Rounds",
+       x = "Rounds",
+       y = "Predicted Probability") +
+  theme_minimal()
+print(trend_plot1)
+
+```
+
+### Cond. 4: Reaction time
+```{r }
+data <- read.csv("/Users/jorgevargasmutizabal/Desktop/Frog game statistics/R Analysis Frog/filtered_data.csv")
+
+# Filter the data for Phrase_Condition == 4
+filtered_data <- data %>%
+  filter(Phrase_Condition == 4)
+
+# Hard-code Rounds based on version and level
+filtered_data <- filtered_data %>%
+  mutate(Rounds = case_when(
+    Game_Version == 1 & Game_Level == 5 ~ 1,
+    Game_Version == 1 & Game_Level == 6 ~ 2,
+    Game_Version == 1 & Game_Level == 7 ~ 3,
+    Game_Version == 1 & Game_Level == 8 ~ 4,
+    Game_Version == 2 & Game_Level == 4 ~ 1,
+    Game_Version == 2 & Game_Level == 6 ~ 2,
+    Game_Version == 2 & Game_Level == 7 ~ 3,
+    Game_Version == 2 & Game_Level == 8 ~ 4,
+    Game_Version == 3 & Game_Level == 2 ~ 1,
+    Game_Version == 3 & Game_Level == 3 ~ 2,
+    Game_Version == 3 & Game_Level == 7 ~ 3,
+    Game_Version == 3 & Game_Level == 8 ~ 4,
+    Game_Version == 4 & Game_Level == 1 ~ 1,
+    Game_Version == 4 & Game_Level == 3 ~ 2,
+    Game_Version == 4 & Game_Level == 7 ~ 3,
+    Game_Version == 4 & Game_Level == 8 ~ 4,
+    TRUE ~ NA_integer_
+  ))
+
+
+# Assuming your data frame is named df
+summary_table <- filtered_data %>%
+  group_by(Game_Version, Game_Level, Rounds) %>%
+  summarise(Count = n(), .groups = 'drop')
+
+print(summary_table)
+
+#total number of conditions instance by level
+filtered_data %>%
+  group_by(Rounds) %>%
+  summarise(Count = n())
+
+filtered_data <- filtered_data %>%
+  mutate(
+    Player_ID = as.factor(Player_ID),          # Convert to factor
+    LexTale = as.numeric(LexTale),              # Convert to numeric
+    Game_Version = as.factor(Game_Version),     # Convert to factor
+    Game_Level = as.numeric(Game_Level),        # Convert to factor
+    Phrase_Condition = as.factor(Phrase_Condition), # Convert to factor
+    Question_Num = as.numeric(Question_Num),    # Convert to numeric
+    Answer = as.numeric(Answer),                 # Convert to factor
+    Reaction_Time = as.numeric(Reaction_Time),   # Convert to numeric
+    Rounds = as.numeric(Rounds)   # Convert to numeric
+  )
+```
+
+## fitting condition 4
+```{r }
+# Fit the model with Game_Level as a numeric predictor
+model3 <- lmer(Reaction_Time ~ 1 + Rounds + (1 | Player_ID), data = filtered_data)
+
+# Print a summary of the model to examine fixed and random effects
+print(summary(model3))
+
+# Diagnostic plots for residuals - Adjusted for typical visualization tools in R
+plot(model3)
+
+# Additional model diagnostics from the 'performance' package
+check_model(model3)  # This function will check various model assumptions and fit indices
+
+# Estimate marginal means at specific points along the Rounds
+# You would need to know the range or specific points of interest.
+# For example, if Game_Level ranges from 1 to 10, you might choose points like 1, 5, and 10.
+emm0 <- emmeans(model3, specs = ~ Rounds, at = list(Rounds = c(1, 2,3,4)))
+
+# Convert the summary to a data frame
+emm0_df <- as.data.frame(summary(emm0))
+
+# Then, you can plot these points as before:
+emm_plot <- ggplot(emm0_df, aes(x = Rounds, y = emmean)) +
+  geom_point() +  # Add points for each estimated marginal mean
+  geom_line() +  # Connect the points with a line to show trends
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.1) +  # Add error bars for confidence intervals
+  labs(title = "Estimated Marginal Means of Reaction Time by Rounds",
+       x = "Rounds",
+       y = "Estimated Marginal Mean Reaction Time") +
+  theme_minimal()  # Use a minimal theme for a clean look
+
+# Print the plot
+print(emm_plot)
+
+# Trend analysis for numeric Game_Level
+# Assuming trend_analysis is already obtained and contains the trend estimate
+# Determine the range of Game_Level you want to visualize
+rounds <- seq(min(filtered_data$Rounds), max(filtered_data$Rounds), by = 1)
+
+# Retrieve the actual coefficient for Rounds from the model
+coef_estimate_for_rounds <- coef(summary(model0))['Rounds', 'Estimate'] 
+
+# Calculate predicted reaction times based on the actual model coefficient
+predicted_reaction_times <- coef_estimate_for_rounds * rounds + coef(summary(model1))["(Intercept)", "Estimate"]
+
+# Create a dataframe for plotting
+trend_data <- data.frame(Rounds = rounds, Predicted_Reaction_Time = predicted_reaction_times)
+
+# Plotting the trend
+trend_plot <- ggplot(trend_data, aes(x = Rounds, y = Predicted_Reaction_Time)) +
+  geom_line(color = "blue") +
+  labs(title = "Trend of Reaction Time Across Rounds",
+       x = "Rounds",
+       y = "Predicted Reaction Time") +
+  theme_minimal()
+
+# Print the plot
+print(trend_plot)
+```
+##Cond.4 Accuracy 
+
+```{r }
+# Fit the model using glmer for a binary response
+model3 <- glmer(Answer ~ 1 + Rounds + (1 | Player_ID), data = filtered_data, family = binomial)
+
+# Print a summary of the model to examine fixed and random effects
+print(summary(model3))
+
+# Simulate residuals using DHARMa
+simulationOutput <- simulateResiduals(fittedModel = model1, n = 250)
+
+# Create diagnostic plots
+plot(simulationOutput)
+plotResiduals(simulationOutput)
+plot(simulationOutput, type = "uniform")
+plot(simulationOutput, type = "acf")
+
+# Estimate marginal means at specific points along the Rounds
+emm1 <- emmeans(model3, specs = ~ Rounds, at = list(Rounds = c(1, 2, 3, 4)), type = "response")
+emm1_df <- as.data.frame(summary(emm1))
+
+# Plot these points
+emm_plot1 <- ggplot(emm1_df, aes(x = Rounds, y = prob)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.1) +
+  labs(title = "Estimated Marginal Probabilities of Answer = 1 by Rounds",
+       x = "Rounds",
+       y = "Probability of Answer = 1") +
+  theme_minimal()
+print(emm_plot1)
+
+# Trend analysis for Rounds
+trend_analysis1 <- emtrends(model1, specs = ~ Rounds, var = "Rounds")
+
+# Calculate and plot predicted probabilities across Rounds
+rounds <- seq(min(filtered_data$Rounds), max(filtered_data$Rounds), by = 1)
+predicted_probs <- predict(model1, newdata = data.frame(Rounds = rounds), type = "response", re.form = NA)
+
+trend_data1 <- data.frame(Rounds = rounds, Predicted_Probability = predicted_probs)
+trend_plot1 <- ggplot(trend_data1, aes(x = Rounds, y = Predicted_Probability)) +
+  geom_line(color = "blue") +
+  labs(title = "Trend of Probability of Answer = 1 Across Rounds",
+       x = "Rounds",
+       y = "Predicted Probability") +
+  theme_minimal()
+print(trend_plot1)
+
+```
+
+
+
+```{r }
+# Fit the model using glmer for a binary response
+model1 <- glmer(Answer ~ 1 + Rounds + (1 | Player_ID), data = filtered_data, family = binomial)
+
+# Print a summary of the model to examine fixed and random effects
+print(summary(model1))
+
+# Simulate residuals using DHARMa
+simulationOutput <- simulateResiduals(fittedModel = model1, n = 250)
+
+# Create diagnostic plots
+plot(simulationOutput)
+plotResiduals(simulationOutput)
+plot(simulationOutput, type = "uniform")
+plot(simulationOutput, type = "acf")
+
+# Estimate marginal means at specific points along the Rounds
+emm1 <- emmeans(model1, specs = ~ Rounds, at = list(Rounds = c(1, 2, 3, 4)), type = "response")
+emm1_df <- as.data.frame(summary(emm1))
+
+# Plot these points
+emm_plot1 <- ggplot(emm1_df, aes(x = Rounds, y = prob)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.1) +
+  labs(title = "Estimated Marginal Probabilities of Answer = 1 by Rounds",
+       x = "Rounds",
+       y = "Probability of Answer = 1") +
+  theme_minimal()
+print(emm_plot1)
+
+# Trend analysis for Rounds
+trend_analysis1 <- emtrends(model1, specs = ~ Rounds, var = "Rounds")
+
+# Calculate and plot predicted probabilities across Rounds
+rounds <- seq(min(filtered_data$Rounds), max(filtered_data$Rounds), by = 1)
+predicted_probs <- predict(model1, newdata = data.frame(Rounds = rounds), type = "response", re.form = NA)
+
+trend_data1 <- data.frame(Rounds = rounds, Predicted_Probability = predicted_probs)
+trend_plot1 <- ggplot(trend_data1, aes(x = Rounds, y = Predicted_Probability)) +
+  geom_line(color = "blue") +
+  labs(title = "Trend of Probability of Answer = 1 Across Rounds",
+       x = "Rounds",
+       y = "Predicted Probability") +
+  theme_minimal()
+print(trend_plot1)
+
+```
+
+### Average reaction time por cada nivel sin importar la condición ni version.
+```{r }
+# Fit the model with Game_Level as a numeric predictor
+model4 <- lmer(Reaction_Time ~ 1 + Game_Level + (1 | Player_ID), data = data)
+
+# Print a summary of the model to examine fixed and random effects
+print(summary(model4))
+
+# Diagnostic plots for residuals - Adjusted for typical visualization tools in R
+plot(model4)
+
+# Additional model diagnostics from the 'performance' package
+check_model(model4)
+
+# Estimate marginal means at specific points along the Game_Level
+emm0 <- emmeans(model4, specs = ~ Game_Level, at = list(Game_Level = c(1, 2, 3, 4, 5, 6, 7, 8))) #####
+
+# Convert the summary to a data frame
+emm0_df <- as.data.frame(summary(emm0))
+
+# Then, you can plot these points
+emm_plot <- ggplot(emm0_df, aes(x = Game_Level, y = emmean)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.1) +
+  labs(title = "Estimated Marginal Means of Reaction Time by Game_Level",
+       x = "Game_Level",
+       y = "Estimated Marginal Mean Reaction Time") +
+  theme_minimal()
+print(emm_plot)
+
+# Trend analysis for numeric Game_Level
+game_levels <- seq(min(data$Game_Level), max(data$Game_Level), by = 1)
+
+# Retrieve the actual coefficient for Game_Level from the model
+coef_estimate_for_gls <- coef(summary(model4))['Game_Level', 'Estimate'] 
+
+# Calculate predicted reaction times based on the actual model coefficient
+predicted_reaction_times <- coef_estimate_for_gls * game_levels + coef(summary(model0))["(Intercept)", "Estimate"]
+
+# Create a dataframe for plotting
+trend_data <- data.frame(Game_Level = game_levels, Predicted_Reaction_Time = predicted_reaction_times)
+
+# Plotting the trend
+trend_plot <- ggplot(trend_data, aes(x = Game_Level, y = Predicted_Reaction_Time)) +
+  geom_line(color = "blue") +
+  labs(title = "Trend of Reaction Time Across Game_Level",
+       x = "Game_Level",
+       y = "Predicted Reaction Time") +
+  theme_minimal()
+print(trend_plot)
+```
+
+### Accuracy por cada nivel marginzalizando la condición y versión .
+```{r}
+# Fit the model using glmer for a binary response
+model5 <- glmer(Answer ~ 1 + Game_Level + (1 | Player_ID), data = data, family = binomial)
+
+# Print a summary of the model to examine fixed and random effects
+print(summary(model5))
+
+# Diagnostic plots for residuals - Adjusted for typical visualization tools in R
+plot(model5)
+
+# Additional model diagnostics from the 'performance' package
+check_model(model5)
+
+# Estimate marginal means at specific points along the Game_Level
+emm0 <- emmeans(model5, specs = ~ Game_Level, at = list(Game_Level = c(1, 2, 3, 4, 5, 6, 7, 8))) #####
+
+# Convert the summary to a data frame
+emm0_df <- as.data.frame(summary(emm0))
+
+# Convert the log odds (emmean) to probabilities
+emm0_df$probability <- 1 / (1 + exp(-emm0_df$emmean))
+
+# Then, you can plot these probabilities
+emm_plot <- ggplot(emm0_df, aes(x = Game_Level, y = probability)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = 1 / (1 + exp(-asymp.LCL)), ymax = 1 / (1 + exp(-asymp.UCL))), width = 0.1) +
+  labs(title = "Predicted Probability of Correct Answer by Game_Level",
+       x = "Game_Level",
+       y = "Probability of Correct Answer") +
+  theme_minimal()
+print(emm_plot)
+
+# Trend analysis for numeric Game_Level
+game_levels <- seq(min(data$Game_Level), max(data$Game_Level), by = 1)
+
+# Retrieve the actual coefficient for Game_Level from the model
+coef_estimate_for_gls <- coef(summary(model5))['Game_Level', 'Estimate'] 
+
+# Calculate predicted log odds based on the actual model coefficient
+predicted_log_odds <- coef_estimate_for_gls * game_levels + coef(summary(model5))["(Intercept)", "Estimate"]
+
+# Convert predicted log odds to probabilities
+predicted_probabilities <- 1 / (1 + exp(-predicted_log_odds))
+
+# Create a dataframe for plotting
+trend_data <- data.frame(Game_Level = game_levels, Predicted_Probability = predicted_probabilities)
+
+# Plotting the trend of probabilities
+trend_plot <- ggplot(trend_data, aes(x = Game_Level, y = Predicted_Probability)) +
+  geom_line(color = "blue") +
+  labs(title = "Trend of Predicted Probability Across Game_Level",
+       x = "Game_Level",
+       y = "Predicted Probability") +
+  theme_minimal()
+print(trend_plot)
+
+```
+
