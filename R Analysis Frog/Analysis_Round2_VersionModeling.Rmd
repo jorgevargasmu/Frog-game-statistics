@@ -2,7 +2,9 @@
 title: "Round2_Analysis_conditions&levels"
 author: "JMG"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -135,6 +137,13 @@ emm0 <- emmeans(model0, specs = ~ Rounds, at = list(Rounds = c(1, 2,3,4)))
 # Convert the summary to a data frame
 emm0_df <- as.data.frame(summary(emm0))
 
+# Print the estimated marginal means separately
+print(emm0_df)
+
+# Extract and print just the mean values
+mean_values <- emm0_df$emmean
+print(mean_values)
+
 # Then, you can plot these points as before:
 emm_plot <- ggplot(emm0_df, aes(x = Rounds, y = emmean)) +
   geom_point() +  # Add points for each estimated marginal mean
@@ -194,6 +203,13 @@ plot(simulationOutput, type = "acf")
 # Estimate marginal means at specific points along the Rounds
 emm1 <- emmeans(model0, specs = ~ Rounds, at = list(Rounds = c(1, 2, 3, 4)), type = "response")
 emm1_df <- as.data.frame(summary(emm1))
+
+# Print the estimated marginal means separately
+print(emm1_df)
+
+# Extract and print just the mean values
+mean_values <- emm1_df$emmean
+print(mean_values)
 
 # Plot these points
 emm_plot1 <- ggplot(emm1_df, aes(x = Rounds, y = prob)) +
@@ -304,6 +320,13 @@ emm0 <- emmeans(model1, specs = ~ Rounds, at = list(Rounds = c(1,2,3,4)))
 # Convert the summary to a data frame
 emm0_df <- as.data.frame(summary(emm0))
 
+# Print the estimated marginal means separately
+print(emm0_df)
+
+# Extract and print just the mean values
+mean_values <- emm0_df$emmean
+print(mean_values)
+
 # Then, you can plot these points as before:
 emm_plot <- ggplot(emm0_df, aes(x = Rounds, y = emmean)) +
   geom_point() +  # Add points for each estimated marginal mean
@@ -363,6 +386,13 @@ plot(simulationOutput, type = "acf")
 # Estimate marginal means at specific points along the Rounds
 emm1 <- emmeans(model1, specs = ~ Rounds, at = list(Rounds = c(1, 2, 3, 4)), type = "response")
 emm1_df <- as.data.frame(summary(emm1))
+
+# Print the estimated marginal means separately
+print(emm1_df)
+
+# Extract and print just the mean values
+mean_values <- emm1_df$emmean
+print(mean_values)
 
 # Plot these points
 emm_plot1 <- ggplot(emm1_df, aes(x = Rounds, y = prob)) +
@@ -467,10 +497,17 @@ check_model(model2)  # This function will check various model assumptions and fi
 # Estimate marginal means at specific points along the Rounds
 # You would need to know the range or specific points of interest.
 # For example, if Game_Level ranges from 1 to 10, you might choose points like 1, 5, and 10.
-emm0 <- emmeans(model0, specs = ~ Rounds, at = list(Rounds = c(1, 2,3,4)))
+emm0 <- emmeans(model2, specs = ~ Rounds, at = list(Rounds = c(1, 2,3,4)))
 
 # Convert the summary to a data frame
 emm0_df <- as.data.frame(summary(emm0))
+
+# Print the estimated marginal means separately
+print(emm0_df)
+
+# Extract and print just the mean values
+mean_values <- emm0_df$emmean
+print(mean_values)
 
 # Then, you can plot these points as before:
 emm_plot <- ggplot(emm0_df, aes(x = Rounds, y = emmean)) +
@@ -491,7 +528,7 @@ print(emm_plot)
 rounds <- seq(min(filtered_data$Rounds), max(filtered_data$Rounds), by = 1)
 
 # Retrieve the actual coefficient for Rounds from the model
-coef_estimate_for_rounds <- coef(summary(model0))['Rounds', 'Estimate'] 
+coef_estimate_for_rounds <- coef(summary(model2))['Rounds', 'Estimate'] 
 
 # Calculate predicted reaction times based on the actual model coefficient
 predicted_reaction_times <- coef_estimate_for_rounds * rounds + coef(summary(model0))["(Intercept)", "Estimate"]
@@ -530,6 +567,13 @@ plot(simulationOutput, type = "acf")
 # Estimate marginal means at specific points along the Rounds
 emm1 <- emmeans(model2, specs = ~ Rounds, at = list(Rounds = c(1, 2, 3, 4)), type = "response")
 emm1_df <- as.data.frame(summary(emm1))
+
+# Print the estimated marginal means separately
+print(emm1_df)
+
+# Extract and print just the mean values
+mean_values <- emm1_df$emmean
+print(mean_values)
 
 # Plot these points
 emm_plot1 <- ggplot(emm1_df, aes(x = Rounds, y = prob)) +
@@ -639,6 +683,13 @@ emm0 <- emmeans(model3, specs = ~ Rounds, at = list(Rounds = c(1, 2,3,4)))
 # Convert the summary to a data frame
 emm0_df <- as.data.frame(summary(emm0))
 
+# Print the estimated marginal means separately
+print(emm0_df)
+
+# Extract and print just the mean values
+mean_values <- emm0_df$emmean
+print(mean_values)
+
 # Then, you can plot these points as before:
 emm_plot <- ggplot(emm0_df, aes(x = Rounds, y = emmean)) +
   geom_point() +  # Add points for each estimated marginal mean
@@ -658,7 +709,7 @@ print(emm_plot)
 rounds <- seq(min(filtered_data$Rounds), max(filtered_data$Rounds), by = 1)
 
 # Retrieve the actual coefficient for Rounds from the model
-coef_estimate_for_rounds <- coef(summary(model0))['Rounds', 'Estimate'] 
+coef_estimate_for_rounds <- coef(summary(model3))['Rounds', 'Estimate'] 
 
 # Calculate predicted reaction times based on the actual model coefficient
 predicted_reaction_times <- coef_estimate_for_rounds * rounds + coef(summary(model1))["(Intercept)", "Estimate"]
@@ -699,56 +750,12 @@ plot(simulationOutput, type = "acf")
 emm1 <- emmeans(model3, specs = ~ Rounds, at = list(Rounds = c(1, 2, 3, 4)), type = "response")
 emm1_df <- as.data.frame(summary(emm1))
 
-# Plot these points
-emm_plot1 <- ggplot(emm1_df, aes(x = Rounds, y = prob)) +
-  geom_point() +
-  geom_line() +
-  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.1) +
-  labs(title = "Estimated Marginal Probabilities of Answer = 1 by Rounds",
-       x = "Rounds",
-       y = "Probability of Answer = 1") +
-  theme_minimal()
-print(emm_plot1)
+# Print the estimated marginal means separately
+print(emm1_df)
 
-# Trend analysis for Rounds
-trend_analysis1 <- emtrends(model1, specs = ~ Rounds, var = "Rounds")
-
-# Calculate and plot predicted probabilities across Rounds
-rounds <- seq(min(filtered_data$Rounds), max(filtered_data$Rounds), by = 1)
-predicted_probs <- predict(model1, newdata = data.frame(Rounds = rounds), type = "response", re.form = NA)
-
-trend_data1 <- data.frame(Rounds = rounds, Predicted_Probability = predicted_probs)
-trend_plot1 <- ggplot(trend_data1, aes(x = Rounds, y = Predicted_Probability)) +
-  geom_line(color = "blue") +
-  labs(title = "Trend of Probability of Answer = 1 Across Rounds",
-       x = "Rounds",
-       y = "Predicted Probability") +
-  theme_minimal()
-print(trend_plot1)
-
-```
-
-
-
-```{r }
-# Fit the model using glmer for a binary response
-model1 <- glmer(Answer ~ 1 + Rounds + (1 | Player_ID), data = filtered_data, family = binomial)
-
-# Print a summary of the model to examine fixed and random effects
-print(summary(model1))
-
-# Simulate residuals using DHARMa
-simulationOutput <- simulateResiduals(fittedModel = model1, n = 250)
-
-# Create diagnostic plots
-plot(simulationOutput)
-plotResiduals(simulationOutput)
-plot(simulationOutput, type = "uniform")
-plot(simulationOutput, type = "acf")
-
-# Estimate marginal means at specific points along the Rounds
-emm1 <- emmeans(model1, specs = ~ Rounds, at = list(Rounds = c(1, 2, 3, 4)), type = "response")
-emm1_df <- as.data.frame(summary(emm1))
+# Extract and print just the mean values
+mean_values <- emm1_df$emmean
+print(mean_values)
 
 # Plot these points
 emm_plot1 <- ggplot(emm1_df, aes(x = Rounds, y = prob)) +
@@ -778,6 +785,9 @@ trend_plot1 <- ggplot(trend_data1, aes(x = Rounds, y = Predicted_Probability)) +
 print(trend_plot1)
 
 ```
+
+
+
 
 ### Average reaction time por cada nivel sin importar la condición ni version.
 ```{r }
@@ -798,6 +808,13 @@ emm0 <- emmeans(model4, specs = ~ Game_Level, at = list(Game_Level = c(1, 2, 3, 
 
 # Convert the summary to a data frame
 emm0_df <- as.data.frame(summary(emm0))
+
+# Print the estimated marginal means separately
+print(emm0_df)
+
+# Extract and print just the mean values
+mean_values <- emm0_df$emmean
+print(mean_values)
 
 # Then, you can plot these points
 emm_plot <- ggplot(emm0_df, aes(x = Game_Level, y = emmean)) +
@@ -832,7 +849,7 @@ trend_plot <- ggplot(trend_data, aes(x = Game_Level, y = Predicted_Reaction_Time
 print(trend_plot)
 ```
 
-### Accuracy por cada nivel marginzalizando la condición y versión .
+### Accuracy por cada nivel sin importar la condición y versión .
 ```{r}
 # Fit the model using glmer for a binary response
 model5 <- glmer(Answer ~ 1 + Game_Level + (1 | Player_ID), data = data, family = binomial)
@@ -854,6 +871,13 @@ emm0_df <- as.data.frame(summary(emm0))
 
 # Convert the log odds (emmean) to probabilities
 emm0_df$probability <- 1 / (1 + exp(-emm0_df$emmean))
+
+# Print the estimated marginal means separately
+print(emm0_df$probability)
+
+# Extract and print just the mean values
+mean_values <- emm0_df$emmean
+print(mean_values)
 
 # Then, you can plot these probabilities
 emm_plot <- ggplot(emm0_df, aes(x = Game_Level, y = probability)) +
